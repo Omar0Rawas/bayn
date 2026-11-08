@@ -3,11 +3,12 @@
   Bayn task runner for Windows (mirrors the Makefile).
 
 .EXAMPLE
-  .\scripts\bayn.ps1 setup      # create .venv and install pinned deps
-  .\scripts\bayn.ps1 demo       # simulated EEG + scripted gestures, opens the dashboard
-  .\scripts\bayn.ps1 test
+  .\bayn setup      # create .venv and install pinned deps
+  .\bayn demo       # simulated EEG + scripted gestures, opens the dashboard
+  .\bayn test
 
-  If scripts are blocked:  powershell -ExecutionPolicy Bypass -File .\scripts\bayn.ps1 setup
+  Call it through ..\bayn.cmd: Windows blocks .ps1 scripts by default, and the
+  wrapper bypasses that for the single call without changing system settings.
 #>
 param(
   [Parameter(Position = 0)][string]$Task = "help",
@@ -35,7 +36,7 @@ function Find-BasePython {
 }
 
 function Require-Venv {
-  if (-not (Test-Path $Py)) { throw "No .venv yet - run: .\scripts\bayn.ps1 setup" }
+  if (-not (Test-Path $Py)) { throw "No .venv yet - run: .\bayn setup" }
 }
 
 switch ($Task) {
@@ -53,6 +54,7 @@ switch ($Task) {
   }
   "demo"   { Require-Venv; & $Py -m bayn.run --demo @Rest }
   "run"    { Require-Venv; & $Py -m bayn.run @Rest }
+  "check"  { Require-Venv; & $Py -m bayn.eeg.check @Rest }
   "bridge" { Require-Venv; & $Py -m bayn.eeg.bridge @Rest }
   "ui"     { Require-Venv; & $Py -m bayn.ui.server @Rest }
   "test"   { Require-Venv; & $Py -m pytest @Rest }
@@ -67,7 +69,8 @@ switch ($Task) {
 Bayn tasks:
   setup    create .venv, install pinned dependencies, run doctor
   demo     simulated EEG with scripted gestures + dashboard (no hardware)
-  run      run with the configured EEG source  (e.g. run --source sim)
+  run      real Muse 2 (default) + dashboard   (run --source lsl | --source sim)
+  check    connect to the headset for 10 s and report signal quality (check --name Muse-3EE1)
   bridge   EEG bridge only           ui   dashboard only
   test     run the test suite        doctor  check this machine
   clean    remove caches

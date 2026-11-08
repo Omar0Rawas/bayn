@@ -1,4 +1,7 @@
 import numpy as np
+import pytest
+
+pytestmark = pytest.mark.unit
 
 from bayn.eeg.buffer import RingBuffer
 from bayn.eeg.quality import channel_quality, detect_mains

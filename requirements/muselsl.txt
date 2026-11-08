@@ -1,0 +1,6 @@
+# muse-lsl fallback (`muselsl stream`). Only top-level pins: its Bluetooth backend
+# pulls different platform packages on Windows / macOS / Linux, so pip resolves those.
+muselsl==2.5.3
+bleak==3.1.0
+# muselsl 2.5.3 crashes with bitstring 5 ("The 'bytes' keyword has been removed")
+bitstring==4.4.0

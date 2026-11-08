@@ -1,5 +1,6 @@
-# Test tooling on top of base.txt
+# Everything for a native install: core + muse-lsl fallback + test tooling
 -r base.txt
+-r muselsl.txt
 certifi==2026.10.23
 httpcore==1.0.9
 httpx==0.28.1

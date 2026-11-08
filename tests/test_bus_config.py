@@ -8,6 +8,7 @@ from bayn.common.config import load_config
 from bayn.common.schemas import EEGChunk, EEGStatus, ChannelQuality
 
 
+@pytest.mark.unit
 def test_pack_roundtrip_ndarray():
     a = np.arange(12, dtype=np.float32).reshape(3, 4)
     out = unpack(pack({"a": a, "x": np.float64(1.5)}))
@@ -15,6 +16,7 @@ def test_pack_roundtrip_ndarray():
     assert out["x"] == 1.5
 
 
+@pytest.mark.unit
 def test_schema_roundtrip():
     c = EEGChunk(10.0, 256.0, ["A", "B"], np.ones((2, 32), np.float32), seq=3)
     c2 = EEGChunk.from_msg(unpack(pack(c.to_msg())))
@@ -23,6 +25,7 @@ def test_schema_roundtrip():
     assert EEGStatus.from_msg(unpack(pack(s.to_msg()))) == s
 
 
+@pytest.mark.integration
 def test_pubsub_over_tcp():
     pub = Publisher("127.0.0.1", 0)
     sub = Subscriber("127.0.0.1", pub.port, ["eeg.filt"])
@@ -37,6 +40,7 @@ def test_pubsub_over_tcp():
     assert got == ("eeg.filt", {"v": 1})
 
 
+@pytest.mark.integration
 def test_threaded_subscriber_feeds_asyncio_default_loop():
     """Regression: zmq.asyncio fails on Windows' Proactor loop; the threaded bridge must not."""
     import asyncio
@@ -62,6 +66,7 @@ def test_threaded_subscriber_feeds_asyncio_default_loop():
     assert got == ("eeg.filt", {"v": 2})
 
 
+@pytest.mark.unit
 def test_env_overrides_typed():
     cfg = load_config(environ={"BAYN_EEG__SOURCE": "muse", "BAYN_EEG__NOTCH_HZ": "60",
                                "BAYN_SIMULATOR__AUTO_GESTURES__ENABLED": "true",
@@ -72,6 +77,7 @@ def test_env_overrides_typed():
     assert cfg.ui.port == 9001
 
 
+@pytest.mark.unit
 def test_bad_notch_rejected():
     with pytest.raises(Exception):
         load_config(environ={"BAYN_EEG__NOTCH_HZ": "55"})

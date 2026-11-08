@@ -27,7 +27,8 @@ from bayn import __version__
 from bayn.common.bus import CommandSender, ThreadedSubscriber
 from bayn.common.config import AppConfig, load_config
 from bayn.common.log import setup_logging
-from bayn.common.schemas import GESTURES, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED, TOPIC_EEG_STATUS
+from bayn.common.schemas import (GESTURES, TOPIC_EEG_BANDS, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED,
+                                 TOPIC_EEG_STATUS)
 
 log = logging.getLogger("bayn.ui")
 STATIC = Path(__file__).parent / "static"
@@ -60,7 +61,7 @@ def _eeg_to_json(m: dict) -> dict:
 
 async def _relay_eeg(cfg: AppConfig, hub: Hub) -> None:
     sub = ThreadedSubscriber(cfg.bus.eeg_host, cfg.bus.eeg_pub_port,
-                             [TOPIC_EEG_FILT, TOPIC_EEG_STATUS, TOPIC_EEG_INJECTED],
+                             [TOPIC_EEG_FILT, TOPIC_EEG_STATUS, TOPIC_EEG_INJECTED, TOPIC_EEG_BANDS],
                              asyncio.get_running_loop())
     try:
         while True:
@@ -74,6 +75,10 @@ async def _relay_eeg(cfg: AppConfig, hub: Hub) -> None:
                 await hub.broadcast(hub.last_status)
             elif topic == TOPIC_EEG_INJECTED:
                 await hub.broadcast({"type": "injected", **m})
+            elif topic == TOPIC_EEG_BANDS:
+                await hub.broadcast({"type": "bands", "t": m["t"], "channels": m["channels"],
+                                     "bands": m["bands"],
+                                     "relative": np.round(np.asarray(m["relative"]), 4).tolist()})
     finally:
         sub.close()
 

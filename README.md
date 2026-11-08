@@ -13,15 +13,15 @@
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Repo, simulated EEG, dashboard skeleton | ✅ done |
-| 2 | Real Muse 2 (BrainFlow, muse-lsl fallback) | ⏳ next |
-| 3 | Gesture trigger (jaw clench / double blink), calibration, events | ⬜ |
+| 2 | Real Muse 2 (BrainFlow, muse-lsl fallback) | ✅ done |
+| 3 | Gesture trigger (jaw clench / double blink), calibration, events | ⏳ next |
 | 4 | Live Whisper transcription (English / Arabic / mixed) | ⬜ |
 | 5 | Ollama summaries | ⬜ |
-| 6 | Gesture tuning on the real headset | ⬜ |
+| 6 | Gesture tuning on the real headset + guided "blink twice" onboarding | ⬜ |
 | 7 | Docker Compose + docs polish | ⬜ |
 | 8 | Full end-to-end test run (simulated and real) | ⬜ |
 
-Details per phase: [docs/PROGRESS.md](docs/PROGRESS.md).
+Details per phase: [docs/PROGRESS.md](docs/PROGRESS.md). How everything is tested, with results: [docs/TESTING.md](docs/TESTING.md).
 
 ## How it works
 
@@ -52,6 +52,7 @@ flowchart LR
 - **One message bus (ZeroMQ, TCP).** Every component is a separate process, so it works the same natively and in Docker.
 - **The trigger sits behind a `Detector` interface** (Phase 3). The jaw clench, the double blink, the manual button/hotkey and a future seizure model are interchangeable.
 - **No hardware assumptions.** The mains notch defaults to `auto` (measures 50 vs 60 Hz). Whisper picks GPU or CPU at startup.
+- **Brainwave view, like the Muse app.** Live delta / theta / alpha / beta / gamma per sensor, e.g. *Alpha (AF7)*. Close your eyes and watch alpha rise on TP9/TP10.
 
 ## Quickstart
 
@@ -59,10 +60,12 @@ Requires **Python 3.12+**. No headset or microphone is needed for the demo.
 
 ### Windows (PowerShell)
 ```powershell
-.\scripts\bayn.ps1 setup     # creates .venv, installs pinned deps, runs the machine check
-.\scripts\bayn.ps1 demo      # simulated EEG + scripted gestures, opens http://127.0.0.1:8080
+.\bayn setup     # creates .venv, installs pinned deps, runs the machine check
+.\bayn demo      # simulated EEG + scripted gestures, opens http://127.0.0.1:8080
+.\bayn check     # with the headset on: 10 s connection + signal-quality test
+.\bayn run       # real Muse 2 (default source) + dashboard
 ```
-If PowerShell blocks scripts: `powershell -ExecutionPolicy Bypass -File .\scripts\bayn.ps1 setup`
+`bayn.cmd` works even though Windows blocks PowerShell scripts by default. It bypasses the policy for that one call only, and nothing on your system changes.
 
 ### macOS / Linux
 ```bash
@@ -77,24 +80,39 @@ pip install -r requirements/dev.txt && pip install -e . --no-deps
 python -m bayn.run --demo
 ```
 
-Other commands: `test`, `doctor` (check a machine before a demo), `bridge`, `ui`, `clean`.
+Other commands: `test`, `doctor` (check a machine before a demo, including a Bluetooth scan), `bridge`, `ui`, `clean`.
 
 ## Configuration
 
 Settings live in [config/default.yaml](config/default.yaml). Override them per machine with `config/local.yaml` (gitignored) or with environment variables / `.env`:
 
 ```
-BAYN_EEG__SOURCE=sim            # sim | muse | lsl
+BAYN_EEG__SOURCE=muse           # muse | lsl | sim
 BAYN_EEG__NOTCH_HZ=auto         # auto | 50 | 60 | off
 BAYN_UI__PORT=8080
 ```
 
 ## Muse 2 pairing notes
 
-Full instructions arrive in Phase 2. Key points:
-- **Do not pair the Muse in Windows Bluetooth settings.** BrainFlow connects to it directly over BLE. Turn the headset on and leave it in pairing mode (lights moving).
-- Close the Muse phone app and turn off phone Bluetooth. The Muse accepts only one connection at a time.
-- Wet the sensors slightly and check the per-channel quality chips on the dashboard.
+Two ways to read the headset, both tested with a real Muse 2:
+
+| Source | How | When |
+|---|---|---|
+| `muse` (default) | BrainFlow `MUSE_2_BOARD`, native Bluetooth LE | Normal use. No extra process |
+| `lsl` | `muselsl stream` → Lab Streaming Layer → Bayn | Fallback if BrainFlow misbehaves. `run --source lsl` starts and restarts `muselsl` for you |
+
+**Connecting**
+1. **Do not pair the Muse in your OS Bluetooth settings.** If it is already paired there, remove it. Both sources find and connect to the headset directly.
+2. Turn the headset on. The lights should be moving, which means it is waiting for a connection.
+3. **Close the Muse phone app** (or turn off phone Bluetooth). The Muse accepts only one connection at a time, and while the app is connected the headset is invisible to the computer.
+4. Wet the sensors slightly (forehead and behind the ears). Then run `check`: every channel should be `good`.
+5. When several Muses are nearby (hackathon!), pin yours by name: `BAYN_EEG__BRAINFLOW__SERIAL_NUMBER=Muse-XXXX` in `.env`. The name is printed by `doctor` and its last 4 characters match the headset's MAC.
+
+**Troubleshooting**
+- **`doctor` sees no Muse / very few BLE devices:** the Bluetooth radio has poor reception. Desktop Wi-Fi/Bluetooth cards need their screw-on antennas. A USB Bluetooth dongle fixes it.
+- **A USB dongle shows "Code 31" in Device Manager on Windows 10:** many cheap dongles (e.g. Actions ATS2851 chips) only work out of the box on Windows 11 and need the vendor's driver on Windows 10. Realtek RTL8761B dongles (TP-Link UB500, ASUS USB-BT500) work out of the box. Keep only one Bluetooth adapter enabled.
+- **Connected but a channel is `bad`:** adjust the band so the ear sensors (TP9/TP10) touch skin, and move hair from under the forehead sensors.
+- **Mains hum:** handled automatically. The notch removes 50 and 60 Hz and the header shows which one your power grid uses.
 
 ## Project layout
 
@@ -102,16 +120,25 @@ Full instructions arrive in Phase 2. Key points:
 config/          default.yaml (all tunables)
 src/bayn/
   common/        config, ZeroMQ bus, message schemas
-  eeg/           sources (simulated, Muse), streaming filters, ring buffer, quality, bridge
+  eeg/           sources (simulated, Muse via BrainFlow / LSL), filters, ring buffer, quality,
+                 brainwave bands, bridge, check (headset test)
   events/        Detector interface + gesture detectors       (Phase 3)
   transcription/ faster-whisper live transcription            (Phase 4)
   summarization/ Ollama client + prompts                       (Phase 5)
   ui/            FastAPI server + static dashboard (no CDN, works offline)
   run.py         one-command launcher     doctor.py  machine check
 scripts/         bayn.ps1 (Windows tasks), claude-session.ps1
-tests/           pytest suite (runs without hardware)
-docs/            progress log, images
+tests/           pytest suite: unit / integration / system (no hardware) + hardware (real Muse)
+docs/            PROGRESS.md (phase log), TESTING.md (test plan + results), images
 ```
+
+## Testing
+
+```powershell
+.\bayn test                                               # unit + integration + system, no hardware (~20 s)
+$env:BAYN_HARDWARE=1; .\.venv\Scripts\python.exe -m pytest -m hardware -v -s   # with the Muse on
+```
+Tests are grouped into `unit`, `integration`, `system` and `hardware` markers. See [docs/TESTING.md](docs/TESTING.md) for the full test plan, per-phase results, the requirements traceability matrix and the defect log.
 
 ## Privacy
 

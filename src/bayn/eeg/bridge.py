@@ -15,8 +15,9 @@ import time
 from bayn.common.bus import CommandReceiver, Publisher
 from bayn.common.config import AppConfig, load_config
 from bayn.common.log import setup_logging
-from bayn.common.schemas import (GESTURES, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED, TOPIC_EEG_RAW,
-                                 TOPIC_EEG_STATUS, EEGChunk, EEGStatus)
+from bayn.common.schemas import (GESTURES, TOPIC_EEG_BANDS, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED,
+                                 TOPIC_EEG_RAW, TOPIC_EEG_STATUS, EEGChunk, EEGStatus)
+from bayn.eeg.bands import bands_message
 from bayn.eeg.buffer import RingBuffer
 from bayn.eeg.filters import StreamingFilter
 from bayn.eeg.quality import channel_quality, detect_mains
@@ -27,6 +28,8 @@ log = setup_logging(name="bayn.eeg")
 STATUS_EVERY_S = 1.0
 QUALITY_WINDOW_S = 2.0
 MAINS_WINDOW_S = 4.0
+BANDS_EVERY_S = 0.5
+BANDS_WINDOW_S = 2.0
 
 
 class Bridge:
@@ -45,6 +48,8 @@ class Bridge:
         self._last_status = 0.0
         self._last_mains = 0.0
         self._connected = False
+        self._last_t_end: float | None = None
+        self._last_bands = 0.0
 
     # ------------------------------------------------------------ main loop
     def run(self, stop: threading.Event | None = None) -> None:
@@ -52,7 +57,7 @@ class Bridge:
         log.info("starting source '%s' (%s @ %.0f Hz), notch=%s, publishing on :%d",
                  self.source.name, ",".join(self.source.channels), self.source.fs,
                  self.cfg.eeg.notch_hz, self.pub.port)
-        self.source.start()
+        self.source.start()   # non-blocking: real devices connect in their own thread
         try:
             while not stop.is_set():
                 chunk = self.source.read(timeout=1.0)
@@ -61,6 +66,7 @@ class Bridge:
                 self._connected = chunk is not None
                 self._handle_commands()
                 self._maybe_status()
+                self._maybe_bands()
         finally:
             self.source.stop()
             self.pub.close()
@@ -68,6 +74,14 @@ class Bridge:
             log.info("bridge stopped")
 
     def _handle_chunk(self, chunk: EEGChunk) -> None:
+        e = self.cfg.eeg
+        if chunk.fs != self.filter.fs:          # LSL can report its rate only after connecting
+            log.info("sample rate is %.1f Hz - rebuilding filters", chunk.fs)
+            self.filter = StreamingFilter(chunk.fs, len(chunk.channels), tuple(e.bandpass_hz), e.notch_hz)
+        elif self._last_t_end is not None and abs(chunk.t0 - self._last_t_end) > 0.5:
+            log.info("gap of %.1f s in EEG (reconnect?) - resetting filter state", chunk.t0 - self._last_t_end)
+            self.filter.reset()                 # avoid a ringing transient across the gap
+        self._last_t_end = chunk.t_end
         filtered = self.filter.process(chunk.data)
         ts = chunk.timestamps()
         self.raw_buf.append(chunk.data, ts)
@@ -82,6 +96,15 @@ class Bridge:
                 onset = self.source.inject(g) if g in GESTURES else None
                 log.info("inject %s -> %s", g, "ok" if onset else "not supported by this source")
                 self.pub.send(TOPIC_EEG_INJECTED, {"gesture": g, "t": onset, "ok": onset is not None})
+
+    def _maybe_bands(self) -> None:
+        now = time.time()
+        fs = self.source.fs
+        if not self._connected or now - self._last_bands < BANDS_EVERY_S or len(self.raw_buf) < fs * BANDS_WINDOW_S:
+            return
+        self._last_bands = now
+        raw, _ = self.raw_buf.latest(int(fs * BANDS_WINDOW_S))
+        self.pub.send(TOPIC_EEG_BANDS, bands_message(raw, fs, self.source.channels, now))
 
     def _maybe_status(self) -> None:
         now = time.time()
@@ -104,7 +127,7 @@ class Bridge:
             source=self.source.name, connected=self._connected, fs=fs, channels=self.source.channels,
             quality=quality, mains_hz=self.mains_hz, notch=self.cfg.eeg.notch_hz,
             supports_injection=self.source.supports_injection, t=now,
-            message="" if self._connected else "waiting for EEG data...",
+            message="" if self._connected else (self.source.status_message or "waiting for EEG data..."),
         )
         self.pub.send(TOPIC_EEG_STATUS, status.to_msg())
 

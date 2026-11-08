@@ -3,12 +3,13 @@ PYTHON ?= python3
 VENV   := .venv
 PY     := $(VENV)/bin/python
 
-.PHONY: help setup demo run bridge ui test doctor clean
+.PHONY: help setup demo run check bridge ui test doctor clean
 
 help:
 	@echo "setup   create .venv, install pinned deps, run doctor"
 	@echo "demo    simulated EEG with scripted gestures + dashboard (no hardware)"
-	@echo "run     run with the configured EEG source (ARGS='--source sim')"
+	@echo "run     real Muse 2 (default) + dashboard (ARGS='--source lsl')"
+	@echo "check   connect to the headset 10 s, report signal quality (ARGS='--name Muse-XXXX')"
 	@echo "bridge  EEG bridge only    ui  dashboard only"
 	@echo "test    run tests          doctor  check this machine"
 	@echo "clean   remove caches"
@@ -28,6 +29,9 @@ demo:
 
 run:
 	$(PY) -m bayn.run $(ARGS)
+
+check:
+	$(PY) -m bayn.eeg.check $(ARGS)
 
 bridge:
 	$(PY) -m bayn.eeg.bridge $(ARGS)

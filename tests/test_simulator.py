@@ -1,11 +1,12 @@
 import numpy as np
 import pytest
 
-from bayn.common.config import EEGConfig, SimulatorConfig
 from bayn.eeg.filters import StreamingFilter
 from bayn.eeg.quality import robust_amplitude
-from bayn.eeg.sources.simulated import SimulatedEEG, SimulatedSource
+from bayn.eeg.sources.simulated import SimulatedEEG
 from tests.conftest import CHANNELS, FS, band_rms
+
+pytestmark = pytest.mark.unit
 
 
 def test_shape_dtype_and_plausible_amplitude(gen):
@@ -61,17 +62,3 @@ def test_unknown_gesture_rejected(gen):
     with pytest.raises(ValueError):
         gen.inject("wink")
 
-
-def test_source_paces_in_real_time_and_records_ground_truth():
-    import time
-
-    src = SimulatedSource(EEGConfig(chunk_samples=32), SimulatorConfig(seed=3))
-    src.start()
-    t = time.perf_counter()
-    chunks = [src.read() for _ in range(8)]                 # 8 x 125 ms
-    elapsed = time.perf_counter() - t
-    assert 0.8 <= elapsed <= 1.5
-    assert [c.seq for c in chunks] == list(range(8))
-    assert abs(chunks[1].t0 - chunks[0].t_end) < 1e-9       # contiguous timestamps
-    onset = src.inject("clench")
-    assert src.injected == [("clench", onset)]

@@ -20,7 +20,15 @@ Prototype, NOT a medical device. Current status and next steps: docs/PROGRESS.md
 - EEG bridge publishes both `eeg.raw` (needed for clench/EMG detection at 55-100 Hz) and `eeg.filt` (1-40 Hz + notch).
 - Config: config/default.yaml <- config/local.yaml <- .env <- env vars `BAYN_SECTION__KEY` (src/bayn/common/config.py).
 
+## Hardware notes
+- User's headset: Muse-3EE1. Mains on the dev PC's grid is 60 Hz (auto-detected; do not hardcode).
+- Dev PC uses a USB Bluetooth dongle; its built-in adapter is disabled. Only one BLE adapter may be active.
+- muselsl needs bitstring<5.
+
 ## Commands (Windows)
-- `.\scripts\bayn.ps1 setup | demo | run | test | doctor`
-- Tests: `.\.venv\Scripts\python.exe -m pytest` (no hardware needed)
+- `.\bayn setup | demo | run | check | test | doctor` (bayn.cmd wraps scripts/bayn.ps1 with ExecutionPolicy Bypass,
+  because Windows blocks .ps1 scripts by default)
+- Tests: `.\.venv\Scripts\python.exe -m pytest` (no hardware needed); levels via `-m unit|integration|system`;
+  real headset: `$env:BAYN_HARDWARE=1; ... -m hardware -v -s`.
+- Keep docs/TESTING.md current every phase: per-phase results, traceability matrix, defect log (D#), env issues (E#).
 - Python 3.12+ (numpy 2.5 dropped 3.11). Deps pinned in requirements/*.txt; pyproject has loose ranges.

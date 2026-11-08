@@ -43,6 +43,32 @@ def _cmd(*args: str) -> str | None:
         return None
 
 
+def _check_bluetooth(seconds: float = 5.0) -> None:
+    """Short BLE scan: is there a working adapter, and is a Muse advertising?"""
+    try:
+        import asyncio
+
+        from bleak import BleakScanner
+        from bleak.exc import BleakError
+    except ImportError:
+        _add(INFO, "Bluetooth", "bleak not installed - skipped scan (use `check` to test the headset)")
+        return
+    try:
+        found = asyncio.run(BleakScanner.discover(timeout=seconds, return_adv=True))
+    except (BleakError, OSError) as e:
+        _add(WARN, "Bluetooth", f"no usable adapter ({e}) - plug in / enable Bluetooth; on Windows 10 "
+                                "a USB dongle may need its vendor driver")
+        return
+    muses = sorted(((adv.rssi, d.name or adv.local_name) for d, adv in found.values()
+                    if "muse" in (d.name or adv.local_name or "").lower()), reverse=True)
+    _add(OK, "Bluetooth adapter", f"working, {len(found)} BLE devices visible")
+    if muses:
+        _add(OK, "Muse headset", ", ".join(f"{n} ({r} dBm)" for r, n in muses)
+             + (" - several found: set eeg.brainflow.serial_number" if len(muses) > 1 else ""))
+    else:
+        _add(WARN, "Muse headset", "not seen - turn it on (lights moving), close the phone app, move closer")
+
+
 def check() -> int:
     v = sys.version_info
     _add(OK if v >= (3, 12) else FAIL, "Python", f"{platform.python_version()} ({'needs 3.12+' if v < (3, 12) else 'supported'})")
@@ -66,6 +92,14 @@ def check() -> int:
     _add(INFO, "GPU", f"{gpu} - Whisper will use CUDA" if gpu else "none detected - Whisper will run on CPU (fine with the 'small' model)")
 
     _add(INFO, "EEG source (config)", cfg.eeg.source + (" - no headset needed" if cfg.eeg.source == "sim" else ""))
+    for mod, why in (("brainflow", "Muse via BrainFlow"), ("pylsl", "LSL input"), ("muselsl", "muse-lsl fallback")):
+        try:
+            importlib.import_module(mod)
+            _add(OK, f"package {mod}", why)
+        except ImportError:
+            _add(FAIL if mod == "brainflow" else WARN, f"package {mod}", f"missing ({why}) - run setup")
+    if cfg.eeg.source != "sim":
+        _check_bluetooth()
 
     # Later phases - reported now so a new machine can be prepared early.
     _add(INFO if shutil.which("ollama") else WARN, "Ollama", "installed" if shutil.which("ollama") else "not installed (needed from Phase 5: https://ollama.com)")

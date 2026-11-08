@@ -33,18 +33,23 @@ _META_KEYS = {"BAYN_ROOT", "BAYN_DATA_DIR"}
 
 # ---------------------------------------------------------------- models
 class BrainFlowConfig(BaseModel):
+    board: str = "MUSE_2_BOARD"
     serial_number: str = ""
     mac_address: str = ""
-    timeout_s: int = 15
+    timeout_s: int = 20
+    stale_after_s: float = 3.0
 
 
 class LSLConfig(BaseModel):
     stream_type: str = "EEG"
+    stream_name: str = ""
     resolve_timeout_s: float = 10.0
+    autostart_muselsl: bool = True
+    stale_after_s: float = 3.0
 
 
 class EEGConfig(BaseModel):
-    source: Literal["sim", "muse", "lsl"] = "sim"
+    source: Literal["sim", "muse", "lsl"] = "muse"
     channels: list[str] = ["TP9", "AF7", "AF8", "TP10"]
     fs: int = 256
     chunk_samples: int = 32

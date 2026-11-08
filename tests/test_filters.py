@@ -1,7 +1,9 @@
 import numpy as np
+import pytest
 
 from bayn.eeg.filters import StreamingFilter, notch_frequencies
 
+pytestmark = pytest.mark.unit
 FS = 256.0
 
 

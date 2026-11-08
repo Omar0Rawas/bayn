@@ -1,7 +1,8 @@
 """One-command launcher: starts every native Bayn process and the dashboard.
 
+    python -m bayn.run                 # real Muse 2 via BrainFlow (default source)
+    python -m bayn.run --source lsl    # Muse via muse-lsl (started automatically)
     python -m bayn.run --demo          # simulated EEG + scripted gestures (no hardware)
-    python -m bayn.run --source muse   # real headset (Phase 2)
 
 Each component is a separate process (same as under Docker), so a crash in one
 does not take down the others. Ctrl+C stops everything.
@@ -50,11 +51,27 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.update(env)
     cfg = load_config()
 
-    procs: dict[str, subprocess.Popen] = {}
     py = sys.executable
-    for name, module in [("eeg-bridge", "bayn.eeg.bridge"), ("dashboard", "bayn.ui.server")]:
+    # name -> (command, restart_on_exit). Core processes stop the whole run if they die;
+    # the muse-lsl helper exits whenever the headset drops, so it is simply restarted.
+    specs: dict[str, tuple[list[str], bool]] = {
+        "eeg-bridge": ([py, "-m", "bayn.eeg.bridge"], False),
+        "dashboard": ([py, "-m", "bayn.ui.server"], False),
+    }
+    if cfg.eeg.source == "lsl" and cfg.eeg.lsl.autostart_muselsl:
+        cmd = [py, "-m", "muselsl", "stream"]
+        bf = cfg.eeg.brainflow
+        if bf.mac_address:
+            cmd += ["--address", bf.mac_address]
+        elif bf.serial_number:
+            cmd += ["--name", bf.serial_number]
+        specs["muselsl"] = (cmd, True)
+    log.info("EEG source: %s", cfg.eeg.source + (" (simulated, scripted gestures)" if args.demo else ""))
+
+    procs: dict[str, subprocess.Popen] = {}
+    for name, (cmd, _) in specs.items():
         log.info("starting %s", name)
-        procs[name] = subprocess.Popen([py, "-m", module], env=env)
+        procs[name] = subprocess.Popen(cmd, env=env)
 
     url = f"http://{'127.0.0.1' if cfg.ui.host in ('0.0.0.0', '') else cfg.ui.host}:{cfg.ui.port}"
     if _wait_http(url + "/api/health"):
@@ -67,11 +84,18 @@ def main(argv: list[str] | None = None) -> int:
     code = 0
     try:
         while True:
-            for name, p in procs.items():
-                if p.poll() is not None:
-                    log.error("%s exited with code %s - shutting down", name, p.returncode)
-                    code = p.returncode or 1
-                    raise KeyboardInterrupt
+            for name, p in list(procs.items()):
+                if p.poll() is None:
+                    continue
+                cmd, restart = specs[name]
+                if restart:
+                    log.warning("%s exited (code %s) - restarting in 3 s", name, p.returncode)
+                    time.sleep(3)
+                    procs[name] = subprocess.Popen(cmd, env=env)
+                    continue
+                log.error("%s exited with code %s - shutting down", name, p.returncode)
+                code = p.returncode or 1
+                raise KeyboardInterrupt
             time.sleep(0.5)
     except KeyboardInterrupt:
         pass

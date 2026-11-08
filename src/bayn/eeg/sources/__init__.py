@@ -11,9 +11,12 @@ def make_source(cfg: AppConfig) -> EEGSource:
     src = cfg.eeg.source
     if src == "sim":
         return SimulatedSource(cfg.eeg, cfg.simulator)
-    if src in ("muse", "lsl"):
-        # Real Muse 2 via BrainFlow (and muse-lsl fallback) arrives in Phase 2.
-        raise NotImplementedError(f"EEG source '{src}' is implemented in Phase 2; use 'sim' for now.")
+    if src == "muse":
+        from bayn.eeg.sources.brainflow_muse import BrainFlowSource  # imported lazily: native libs
+        return BrainFlowSource(cfg.eeg)
+    if src == "lsl":
+        from bayn.eeg.sources.lsl_inlet import LSLSource
+        return LSLSource(cfg.eeg)
     raise ValueError(f"unknown EEG source: {src}")
 
 

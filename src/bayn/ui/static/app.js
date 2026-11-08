@@ -12,6 +12,7 @@ const state = {
   write: 0,
   lastT: null,        // timestamp just after the newest sample
   markers: [],        // {t, label}
+  statusMsg: "",      // connection progress from the bridge, e.g. "searching for Muse-3EE1..."
 };
 
 // ------------------------------------------------------------------ helpers
@@ -22,6 +23,7 @@ function toast(msg) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove("show"), 2200);
 }
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const fmtTime = (t) => new Date(t * 1000).toLocaleTimeString([], { hour12: false });
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -122,6 +124,11 @@ function setConn(kind, text) {
 }
 
 function renderStatus(s) {
+  state.statusMsg = s.connected ? "" : s.message;
+  if (s.fs && s.fs !== state.fs) {            // real device rate can differ from config
+    state.fs = s.fs;
+    resetBuffers();
+  }
   $("pill-source").textContent = "Source: " + ({ sim: "Simulated", muse: "Muse 2", lsl: "Muse (LSL)" }[s.source] || s.source);
   $("pill-mains").textContent = "Mains: " + (s.mains_hz ? s.mains_hz + " Hz" : "measuring…");
   $("sim-card").style.display = s.supports_injection ? "" : "none";
@@ -144,6 +151,53 @@ function logInjection(m) {
   if (m.ok) state.markers.push({ t: m.t, label: m.gesture.replace("_", " ") });
 }
 
+// ------------------------------------------------------------------ brainwave bands
+const BAND_INFO = {
+  delta: ["δ", "Delta"], theta: ["θ", "Theta"], alpha: ["α", "Alpha"],
+  beta: ["β", "Beta"], gamma: ["γ", "Gamma"],
+};
+const bandsState = { key: "", smooth: null, cells: [] };
+
+function buildBands(channels, bands) {
+  const el = $("bands");
+  el.style.setProperty("--n-ch", channels.length);
+  el.innerHTML = "";
+  bandsState.cells = [];
+  for (const [b, [lo, hi]] of Object.entries(bands)) {     // one row per band
+    const [sym, name] = BAND_INFO[b] || ["", b];
+    for (const ch of channels) {                            // one column per sensor
+      const cell = document.createElement("div");
+      cell.className = "band-cell";
+      cell.title = `${name} ${lo}–${hi} Hz on ${ch}`;
+      cell.innerHTML = `<div class="lbl"><b>${sym} ${name} (${ch})</b><span>–</span></div>
+        <div class="band-bar"><i style="background: var(--band-${b})"></i></div>`;
+      el.appendChild(cell);
+      bandsState.cells.push(cell);
+    }
+  }
+}
+
+function renderBands(m) {
+  const names = Object.keys(m.bands), nCh = m.channels.length;
+  const key = m.channels.join() + names.join();
+  if (key !== bandsState.key) { buildBands(m.channels, m.bands); bandsState.key = key; bandsState.smooth = null; }
+  // exponential smoothing so bars glide instead of flickering
+  const k = 0.35;
+  bandsState.smooth = m.relative.map((row, c) => row.map((v, b) =>
+    bandsState.smooth ? bandsState.smooth[c][b] * (1 - k) + v * k : v));
+  for (let c = 0; c < nCh; c++) {
+    const row = bandsState.smooth[c];
+    const top = row.indexOf(Math.max(...row));
+    for (let b = 0; b < names.length; b++) {
+      const cell = bandsState.cells[b * nCh + c];
+      const pct = Math.round(row[b] * 100);
+      cell.querySelector(".lbl span").textContent = pct + "%";
+      cell.querySelector(".band-bar i").style.width = Math.min(100, row[b] * 100) + "%";
+      cell.classList.toggle("dominant", b === top);
+    }
+  }
+}
+
 // ------------------------------------------------------------------ websocket
 function connect(delay = 500) {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
@@ -161,10 +215,11 @@ function connect(delay = 500) {
       case "eeg": pushEEG(m); break;
       case "eeg_status": renderStatus(m); break;
       case "injected": logInjection(m); break;
+      case "bands": renderBands(m); break;
       case "heartbeat":
-        if (m.eeg_age_s === null) setConn("down", "No EEG yet");
-        else if (m.eeg_age_s > 2) setConn("down", "EEG signal lost");
-        else setConn("live", "EEG live");
+        if (m.eeg_age_s !== null && m.eeg_age_s <= 2) setConn("live", "EEG live");
+        else setConn("down", state.statusMsg ? capitalize(state.statusMsg)
+                             : m.eeg_age_s === null ? "No EEG yet" : "EEG signal lost");
         break;
     }
   };

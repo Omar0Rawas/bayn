@@ -44,16 +44,30 @@ kbd { font: 11px var(--font); border: 1px solid currentColor; border-radius: 4px
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
 .pill.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
 .pill.down .dot { background: var(--bad); }
+#pill-conn span { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .grid { display: grid; gap: 16px; padding: 16px 20px; max-width: 1500px; margin: 0 auto;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  grid-template-areas: "eeg trigger" "eeg sim" "transcript timeline" "summary summary"; }
-.eeg-card { grid-area: eeg; } .trigger-card { grid-area: trigger; } .sim-card { grid-area: sim; }
+  grid-template-areas: "eeg trigger" "eeg sim" "bands bands" "transcript timeline" "summary summary"; }
+.eeg-card { grid-area: eeg; } .bands-card { grid-area: bands; } .trigger-card { grid-area: trigger; } .sim-card { grid-area: sim; }
 .transcript-card { grid-area: transcript; } .timeline-card { grid-area: timeline; } .summary-card { grid-area: summary; }
 @media (max-width: 900px) {
   .grid { grid-template-columns: minmax(0, 1fr); padding: 12px 16px;
-    grid-template-areas: "eeg" "trigger" "sim" "transcript" "timeline" "summary"; }
+    grid-template-areas: "eeg" "bands" "trigger" "sim" "transcript" "timeline" "summary"; }
 }
+
+/* brainwave bands: rows = bands, columns = sensors */
+:root { --band-delta: #7a6fd8; --band-theta: #2f9fd8; --band-alpha: #1f9d55; --band-beta: #d99a00; --band-gamma: #d64545; }
+.small-inline { font-size: 12px; }
+.bands { display: grid; grid-template-columns: repeat(var(--n-ch, 4), minmax(0, 1fr)); gap: 8px 14px; }
+.band-cell { min-width: 0; }
+.band-cell .lbl { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; margin-bottom: 3px; }
+.band-cell .lbl b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.band-cell .lbl span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.band-bar { height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--muted) 15%, transparent); overflow: hidden; }
+.band-bar i { display: block; height: 100%; width: 0; border-radius: 4px; transition: width .4s ease; }
+.band-cell.dominant .lbl b::after { content: " ★"; color: var(--ok); }
+@media (max-width: 600px) { .bands { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
