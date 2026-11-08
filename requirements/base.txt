@@ -1,0 +1,23 @@
+# Pinned runtime dependencies (core: EEG bridge, bus, dashboard). Python 3.12+.
+# Regenerate: pip install -r requirements/base.txt && pip freeze
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.16.0
+click==8.5.1
+colorama==0.4.6
+fastapi==0.162.2
+h11==0.16.0
+idna==3.20
+msgpack==1.2.4
+numpy==2.5.4
+opentelemetry-api==1.45.2  # pulled in by FastAPI; API stub only, nothing is exported
+pydantic==2.14.3
+pydantic_core==2.50.4
+PyYAML==6.0.3
+pyzmq==27.3.0
+scipy==1.18.1
+starlette==1.10.0
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+uvicorn==0.54.0
+websockets==17.4

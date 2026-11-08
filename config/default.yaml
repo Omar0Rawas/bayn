@@ -1,0 +1,49 @@
+# Bayn default configuration.
+# Override per machine with config/local.yaml (gitignored) or environment variables:
+#   BAYN_<SECTION>__<KEY>=value        e.g.  BAYN_EEG__SOURCE=muse
+#   nested:  BAYN_SIMULATOR__AUTO_GESTURES__ENABLED=true
+# Nothing here assumes specific hardware: GPU, mains frequency, etc. are auto-detected.
+
+eeg:
+  source: sim              # sim | muse (BrainFlow MUSE_2_BOARD) | lsl (muse-lsl fallback)
+  channels: [TP9, AF7, AF8, TP10]
+  fs: 256                  # Muse 2 sample rate (Hz)
+  chunk_samples: 32        # samples per published chunk (32 @ 256 Hz = 125 ms)
+  bandpass_hz: [1.0, 40.0] # display / analysis band
+  notch_hz: auto           # auto | 50 | 60 | off. "auto" notches both 50 and 60 Hz
+                           # (both lie outside 1-40 Hz, so this costs nothing) and
+                           # reports which mains frequency it actually measured.
+  buffer_seconds: 60       # rolling buffer kept by the bridge
+  brainflow:
+    serial_number: ""      # Muse name, e.g. "Muse-1A2B"; empty = first one found
+    mac_address: ""
+    timeout_s: 15
+  lsl:
+    stream_type: EEG
+    resolve_timeout_s: 10
+
+simulator:
+  seed: null               # set an int for reproducible signals
+  mains_hz: 50             # line noise the simulator adds (exercises the auto notch)
+  natural_blinks: true     # random single blinks = realistic distractors for the detector
+  natural_emg: true        # random short, weak muscle bursts (talking, swallowing)
+  auto_gestures:           # scripted injections, used by demo mode
+    enabled: false
+    first_after_s: 15
+    every_s: 45
+    sequence: [clench, double_blink]
+
+bus:
+  bind_host: 127.0.0.1     # interface producers bind to (0.0.0.0 inside Docker)
+  eeg_host: 127.0.0.1      # where consumers find the EEG bridge (host.docker.internal from Docker)
+  eeg_pub_port: 5555       # EEG data + status (PUB)
+  eeg_cmd_port: 5556       # commands to the bridge, e.g. simulator injections (PULL)
+
+ui:
+  host: 127.0.0.1
+  port: 8080
+  plot_seconds: 5          # width of the live EEG plot
+  open_browser: true
+
+logging:
+  level: INFO

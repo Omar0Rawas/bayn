@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bayn Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M2 16h6l3-8 5 16 4-12 3 4h7' fill='none' stroke='%232f7fd8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 16h6l3-8 5 16 4-12 3 4h7"/></svg>
+      <div>
+        <h1>Bayn</h1>
+        <p>EEG trigger &rarr; live transcript &rarr; local summary</p>
+      </div>
+    </div>
+    <div class="pills">
+      <span class="pill" id="pill-conn"><i class="dot"></i><span>Connecting…</span></span>
+      <span class="pill" id="pill-source">Source: –</span>
+      <span class="pill" id="pill-mains" title="Line-noise frequency measured in the signal">Mains: –</span>
+      <span class="pill warn" title="This software is a hackathon prototype">Prototype · not a medical device</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- Live EEG -->
+    <section class="card eeg-card">
+      <div class="card-head">
+        <h2>Live EEG</h2>
+        <div class="controls">
+          <label>Scale
+            <select id="scale">
+              <option value="25">±25 µV</option>
+              <option value="50" selected>±50 µV</option>
+              <option value="100">±100 µV</option>
+              <option value="250">±250 µV</option>
+            </select>
+          </label>
+          <button class="btn ghost" id="btn-pause" type="button">Pause</button>
+        </div>
+      </div>
+      <div class="quality" id="quality"></div>
+      <div class="plot-wrap"><canvas id="eeg-plot"></canvas></div>
+      <p class="hint" id="filter-note">Filtered display</p>
+    </section>
+
+    <!-- Trigger -->
+    <section class="card trigger-card">
+      <div class="card-head"><h2>Event trigger</h2><span class="badge muted" id="trigger-state">Phase 3</span></div>
+      <p class="muted small">Gesture detection (jaw clench / double blink), calibration and cooldown arrive in Phase 3.</p>
+      <button class="btn primary big" id="btn-trigger" type="button" disabled
+              title="Backup manual trigger (hotkey T) - enabled in Phase 3">Trigger event <kbd>T</kbd></button>
+      <button class="btn ghost" id="btn-calibrate" type="button" disabled>Calibrate…</button>
+    </section>
+
+    <!-- Simulator -->
+    <section class="card sim-card" id="sim-card">
+      <div class="card-head"><h2>Simulator</h2><span class="badge muted" id="sim-state">–</span></div>
+      <p class="muted small">Inject fake gestures into the simulated headset.</p>
+      <div class="btn-row">
+        <button class="btn" data-inject="clench" type="button">Jaw clench</button>
+        <button class="btn" data-inject="double_blink" type="button">Double blink</button>
+        <button class="btn ghost" data-inject="blink" type="button">Single blink</button>
+      </div>
+      <ul class="log" id="inject-log"></ul>
+    </section>
+
+    <!-- Transcript -->
+    <section class="card transcript-card">
+      <div class="card-head"><h2>Live transcript</h2><span class="badge muted">Phase 4</span></div>
+      <div class="placeholder">
+        <p>Whisper transcription of the microphone will stream here, timestamped, in English, Arabic or both.</p>
+        <p dir="rtl" lang="ar" class="ar">سيظهر النص المكتوب هنا مباشرةً.</p>
+      </div>
+    </section>
+
+    <!-- Timeline -->
+    <section class="card timeline-card">
+      <div class="card-head"><h2>Event timeline</h2><span class="badge muted">Phase 3</span></div>
+      <div class="placeholder"><p>Triggered events will appear here.</p></div>
+    </section>
+
+    <!-- Summaries -->
+    <section class="card summary-card">
+      <div class="card-head"><h2>Summaries</h2><span class="badge muted">Phase 5</span></div>
+      <div class="placeholder"><p>For each event: transcript window &rarr; EEG stats &rarr; summary generated live by a local LLM.</p></div>
+    </section>
+  </main>
+
+  <footer class="foot">Bayn <span id="version"></span> · runs 100% locally · prototype, not for clinical use</footer>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

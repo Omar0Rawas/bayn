@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Local config & secrets
+.env
+config/local.yaml
+
+# Runtime data (events, EEG windows, calibration profiles, transcripts) and model caches
+data/
+models/
+*.wav
+!samples/audio/*.wav
+
+# Claude session exports contain full chat history - never commit
+claude-session*.zip
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

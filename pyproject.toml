@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bayn"
+version = "0.1.0"
+description = "Local Muse 2 EEG -> gesture trigger -> Whisper transcript -> local LLM summary (hackathon prototype, not a medical device)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+# Loose ranges here; exact pins live in requirements/*.txt
+dependencies = [
+  "numpy>=2.2",
+  "scipy>=1.14",
+  "pyzmq>=26",
+  "msgpack>=1.1",
+  "pyyaml>=6",
+  "pydantic>=2.9",
+  "fastapi>=0.115",
+  "uvicorn>=0.32",
+  "websockets>=13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+bayn = "bayn.run:main"
+bayn-eeg = "bayn.eeg.bridge:main"
+bayn-ui = "bayn.ui.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+bayn = ["ui/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

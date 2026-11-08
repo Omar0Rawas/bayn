@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="400" viewBox="0 0 960 400" font-family="Segoe UI, sans-serif">
+  <rect width="960" height="400" rx="16" fill="#f4f6f9" stroke="#e1e6ee"/>
+  <path d="M120 200h120l40-80 60 160 50-120 40 40h80" fill="none" stroke="#2f7fd8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="560" y="190" font-size="30" font-weight="600" fill="#18202b">Dashboard screenshot</text>
+  <text x="560" y="228" font-size="18" fill="#637083">placeholder: replaced with a real GIF in Phase 7</text>
+</svg>

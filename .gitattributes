@@ -1,0 +1,8 @@
+# Normalise line endings; keep scripts runnable on each OS
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.png binary
+*.gif binary
+*.wav binary
+*.npz binary
