@@ -8,6 +8,9 @@
 5. Ollama summaries (qwen2.5:3b default), transcript → summary view in the UI
 6. Tune gesture triggering on the real headset + guided onboarding (user request, "fun" feature): Muse-app-style
    walkthrough ("blink twice", "clench your jaw", "close your eyes and watch alpha rise") that doubles as calibration
+   + **ML double-blink detector** (user request after the Phase 3 headset test): the guided onboarding records
+   labelled data → features → random forest (double / single blink / movement / other) → `MLDoubleBlinkDetector`;
+   two variants compared: EEG only (like a future device) and EEG + Muse accelerometer; rule-based stays as fallback.
 7. Docker Compose + docs polish
 8. Full end-to-end test run with simulated and real data
 
@@ -53,4 +56,35 @@ Decisions / gotchas:
 - Hardware tests: BrainFlow 256.0 Hz, latency median 20 ms; muse-lsl 256.0 Hz, latency median −23 ms.
 - muse-lsl pulls pandas/scikit-learn/matplotlib → kept in requirements/muselsl.txt (top-level pins, cross-platform).
 
-Next: Phase 3 (gesture trigger + events).
+## Phase 3 — gesture trigger + events ✅
+User test with Muse-3EE1 (2026-11-09): jaw clench works before and after calibration. Rule-based double blink
+false-triggers on head movement and misses natural blinks (TESTING.md F1) → ML detector in Phase 6;
+**jaw clench is the recommended trigger until then.**
+
+Built:
+- `Detector` interface (`events/detectors/base.py`) with `ClenchDetector`, `DoubleBlinkDetector`, `ManualDetector`,
+  `SeizureDetectorStub` (documented plug-in point for a real model). Gesture chosen by `events.gesture`
+  (clench | double_blink | both | manual), switchable at runtime from the dashboard.
+- Clench: 55-100 Hz RMS envelope on TP9/TP10 (mains + harmonics notched), must hold 1 s, adaptive threshold
+  (4x resting level) until calibrated. Double blink: signed peaks on the AF7/AF8 average (0.3-10 Hz), exactly two,
+  0.2-0.8 s apart.
+- `EventManager` (pure, data-time driven): cooldown 15 s, manual debounce 2 s, −10/+30 s window saved to
+  `data/events/<id>/` (eeg.npz, eeg.csv, meta.json with before/after band stats) + SQLite index `data/bayn.db`.
+- Guided calibration: 15 s rest + 3 prompted reps; threshold = geometric mean of rest and gesture level; saved per
+  user AND per source in `data/profiles/<profile>-<source>.json` (so sim calibration never overwrites the real one).
+  In sim mode the simulator performs the prompted gestures.
+- `events` service process (ports 5560 pub / 5561 cmd), started by `bayn run` / `bayn demo`.
+- Dashboard: trigger status (armed / cooldown / calibrating), gesture selector, live level-vs-threshold meters,
+  working Trigger button + `T` hotkey, sound toggle (Web Audio beep), event flash banner + plot marker,
+  calibration overlay with prompts and results, event timeline with CSV/NPZ downloads.
+- Logo: README header + dashboard emblem/favicon; dashboard accent colours from the logo.
+
+Results (simulated, with distractors): clench 40/40, 0 false in 20.7 min; double blink 58/60 (97 %), 0 false in
+62 min; onset error ≤ 0.14 s. 74 automated tests pass (63 unit, 6 integration, 5 system) + 2 hardware.
+
+Decisions / gotchas:
+- Double blink needed signed peaks: the band-pass rebound after every blink looked like a 3rd blink (D9).
+- Events right after start have a short pre-window → flagged `partial` (D10). Demo listens to both gestures (D11).
+- Thresholds on the real headset are untested defaults until the user calibrates; Phase 6 runs the formal protocol.
+
+Next: Phase 4 (Whisper live transcription).

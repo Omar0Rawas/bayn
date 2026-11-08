@@ -40,11 +40,45 @@ simulator:
     every_s: 45
     sequence: [clench, double_blink]
 
+events:
+  gesture: clench          # which deliberate gesture fires an event:
+                           # clench | double_blink | both | manual (button/hotkey only)
+  cooldown_s: 15           # ignore further gestures this long after an event
+  manual_debounce_s: 2     # the button/hotkey can't fire twice within this
+  pre_s: 10                # EEG saved before the event...
+  post_s: 30               # ...and after it
+  profile: default         # calibration profile -> data/profiles/<profile>-<source>.json
+  clench:
+    band_hz: [55, 100]     # jaw-muscle (EMG) band on TP9/TP10; mains + harmonics notched out
+    window_s: 0.25         # RMS envelope window
+    hold_s: 1.0            # must stay above threshold this long (talking/swallowing are shorter)
+    threshold_uv: null     # null = calibrated value, else adaptive (baseline_k x resting level)
+    baseline_k: 4.0
+    min_threshold_uv: 8.0
+  double_blink:
+    band_hz: [0.3, 10]     # blink band on the AF7/AF8 average (low cut keeps the post-blink rebound small)
+    threshold_uv: null     # null = calibrated value, else default_threshold_uv
+    default_threshold_uv: 90   # on the filtered AF7/AF8 average (deliberate blinks ~120-160)
+    min_gap_s: 0.2         # gap between the two blinks
+    max_gap_s: 0.8
+    max_width_s: 0.6       # a blink is a short peak; longer = movement artefact
+    settle_s: 0.45         # wait this long after the 2nd blink to rule out a 3rd
+  calibration:
+    rest_s: 15
+    reps: 3
+    ready_s: 2
+    do_s: 3
+    release_s: 3
+    auto_inject_sim: true  # in simulated mode the simulator performs the prompted gestures
+
 bus:
   bind_host: 127.0.0.1     # interface producers bind to (0.0.0.0 inside Docker)
   eeg_host: 127.0.0.1      # where consumers find the EEG bridge (host.docker.internal from Docker)
   eeg_pub_port: 5555       # EEG data + status (PUB)
   eeg_cmd_port: 5556       # commands to the bridge, e.g. simulator injections (PULL)
+  events_host: 127.0.0.1   # where consumers find the events service
+  events_pub_port: 5560    # events, trigger status, calibration (PUB)
+  events_cmd_port: 5561    # manual trigger, calibration, gesture choice (PULL)
 
 ui:
   host: 127.0.0.1

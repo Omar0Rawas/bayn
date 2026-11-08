@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bayn Dashboard</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M2 16h6l3-8 5 16 4-12 3 4h7' fill='none' stroke='%232f7fd8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 16h6l3-8 5 16 4-12 3 4h7"/></svg>
+      <img src="/static/logo-mark.png" alt="" width="44" height="44">
       <div>
-        <h1>Bayn</h1>
-        <p>EEG trigger &rarr; live transcript &rarr; local summary</p>
+        <h1>Bayn <span class="ar-name" lang="ar">بيّن</span></h1>
+        <p>Bridging the in-between. Keeping meaning clear.</p>
       </div>
     </div>
     <div class="pills">
@@ -58,11 +58,26 @@
 
     <!-- Trigger -->
     <section class="card trigger-card">
-      <div class="card-head"><h2>Event trigger</h2><span class="badge muted" id="trigger-state">Phase 3</span></div>
-      <p class="muted small">Gesture detection (jaw clench / double blink), calibration and cooldown arrive in Phase 3.</p>
-      <button class="btn primary big" id="btn-trigger" type="button" disabled
-              title="Backup manual trigger (hotkey T) - enabled in Phase 3">Trigger event <kbd>T</kbd></button>
-      <button class="btn ghost" id="btn-calibrate" type="button" disabled>Calibrate…</button>
+      <div class="card-head">
+        <h2>Event trigger</h2>
+        <span class="badge muted" id="trigger-state">–</span>
+      </div>
+      <label class="field">Gesture
+        <select id="gesture">
+          <option value="clench">Jaw clench (hold ~1 s)</option>
+          <option value="double_blink">Double blink</option>
+          <option value="both">Either gesture</option>
+          <option value="manual">Manual only (button / T)</option>
+        </select>
+      </label>
+      <div class="meters" id="meters"></div>
+      <button class="btn primary big" id="btn-trigger" type="button"
+              title="Backup manual trigger (hotkey T)">Trigger event <kbd>T</kbd></button>
+      <div class="btn-row">
+        <button class="btn ghost" id="btn-calibrate" type="button">Calibrate…</button>
+        <button class="btn ghost" id="btn-sound" type="button" aria-pressed="false">🔇 Sound off</button>
+      </div>
+      <p class="hint" id="trigger-hint"></p>
     </section>
 
     <!-- Simulator -->
@@ -88,8 +103,9 @@
 
     <!-- Timeline -->
     <section class="card timeline-card">
-      <div class="card-head"><h2>Event timeline</h2><span class="badge muted">Phase 3</span></div>
-      <div class="placeholder"><p>Triggered events will appear here.</p></div>
+      <div class="card-head"><h2>Event timeline</h2><span class="badge muted" id="event-count">0</span></div>
+      <ol class="timeline" id="timeline"></ol>
+      <div class="placeholder" id="timeline-empty"><p>No events yet. Use your gesture, the button, or press <kbd>T</kbd>.</p></div>
     </section>
 
     <!-- Summaries -->
@@ -98,6 +114,24 @@
       <div class="placeholder"><p>For each event: transcript window &rarr; EEG stats &rarr; summary generated live by a local LLM.</p></div>
     </section>
   </main>
+
+  <!-- event flash banner -->
+  <div class="event-banner" id="event-banner" role="alert" aria-live="assertive"></div>
+
+  <!-- guided calibration -->
+  <div class="overlay" id="cal-overlay" hidden>
+    <div class="cal-box" role="dialog" aria-modal="true" aria-labelledby="cal-prompt">
+      <p class="muted small" id="cal-step">Calibration</p>
+      <p class="cal-prompt" id="cal-prompt">Starting…</p>
+      <div class="cal-count" id="cal-count"></div>
+      <div class="progress"><i id="cal-progress"></i></div>
+      <div class="cal-result" id="cal-result"></div>
+      <div class="btn-row cal-actions">
+        <button class="btn ghost" id="cal-cancel" type="button">Cancel</button>
+        <button class="btn primary" id="cal-close" type="button" hidden>Done</button>
+      </div>
+    </div>
+  </div>
 
   <footer class="foot">Bayn <span id="version"></span> · runs 100% locally · prototype, not for clinical use</footer>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

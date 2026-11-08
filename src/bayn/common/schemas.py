@@ -13,6 +13,11 @@ TOPIC_EEG_STATUS = "eeg.status"      # ~1 Hz: connection, per-channel quality, m
 TOPIC_EEG_INJECTED = "eeg.injected"  # simulator ground truth: a gesture was injected
 TOPIC_EEG_BANDS = "eeg.bands"        # ~2 Hz: delta..gamma power per sensor (see eeg/bands.py)
 
+TOPIC_EVENTS_STATUS = "events.status"        # ~4 Hz: armed/cooldown, detector levels vs thresholds
+TOPIC_EVENT = "events.event"                 # an event fired (recording its post window)
+TOPIC_EVENT_DONE = "events.done"             # EEG window saved + stats ready -> starts transcript/summary
+TOPIC_CALIBRATION = "events.calibration"     # calibration prompts, progress, result
+
 GESTURES = ("clench", "double_blink", "blink")
 
 

@@ -46,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo:
         env["BAYN_EEG__SOURCE"] = "sim"
         env["BAYN_SIMULATOR__AUTO_GESTURES__ENABLED"] = "true"
+        env.setdefault("BAYN_EVENTS__GESTURE", "both")     # scripted gestures alternate clench / double blink
     if args.source:
         env["BAYN_EEG__SOURCE"] = args.source
     os.environ.update(env)
@@ -56,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     # the muse-lsl helper exits whenever the headset drops, so it is simply restarted.
     specs: dict[str, tuple[list[str], bool]] = {
         "eeg-bridge": ([py, "-m", "bayn.eeg.bridge"], False),
+        "events": ([py, "-m", "bayn.events.service"], False),
         "dashboard": ([py, "-m", "bayn.ui.server"], False),
     }
     if cfg.eeg.source == "lsl" and cfg.eeg.lsl.autostart_muselsl:

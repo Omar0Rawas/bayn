@@ -18,6 +18,10 @@ Prototype, NOT a medical device. Current status and next steps: docs/PROGRESS.md
   Topics/messages: src/bayn/common/schemas.py.
 - Do NOT use `zmq.asyncio` in the FastAPI server: it fails on Windows' Proactor loop. Use `ThreadedSubscriber`.
 - EEG bridge publishes both `eeg.raw` (needed for clench/EMG detection at 55-100 Hz) and `eeg.filt` (1-40 Hz + notch).
+- Processes: eeg bridge (5555 pub / 5556 cmd), events service (5560 pub / 5561 cmd), dashboard (8080).
+  `bayn.run` starts all of them. Events logic lives in `EventManager` (pure, data-time driven → test offline
+  with tests/helpers.py `sim_chunks`). Event stream: `events.event` → `events.done` (window saved: starts pipeline).
+- Data: data/events/<id>/ (eeg.npz/csv, meta.json), data/bayn.db (SQLite), data/profiles/<profile>-<source>.json.
 - Config: config/default.yaml <- config/local.yaml <- .env <- env vars `BAYN_SECTION__KEY` (src/bayn/common/config.py).
 
 ## Hardware notes

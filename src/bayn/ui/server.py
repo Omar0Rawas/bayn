@@ -2,6 +2,7 @@
 
 Subscribes to the bus and forwards messages to every connected browser over one
 WebSocket. Static assets are served from ./static (no CDN, works offline).
+Browser actions (trigger, calibrate, gesture choice, simulator) become bus commands.
 
     python -m bayn.ui.server
 """
@@ -27,8 +28,11 @@ from bayn import __version__
 from bayn.common.bus import CommandSender, ThreadedSubscriber
 from bayn.common.config import AppConfig, load_config
 from bayn.common.log import setup_logging
-from bayn.common.schemas import (GESTURES, TOPIC_EEG_BANDS, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED,
-                                 TOPIC_EEG_STATUS)
+from bayn.common.schemas import (GESTURES, TOPIC_CALIBRATION, TOPIC_EEG_BANDS, TOPIC_EEG_FILT,
+                                 TOPIC_EEG_INJECTED, TOPIC_EEG_STATUS, TOPIC_EVENT, TOPIC_EVENT_DONE,
+                                 TOPIC_EVENTS_STATUS)
+from bayn.events.detectors import GESTURE_CHOICES
+from bayn.events.store import FILES, EventStore
 
 log = logging.getLogger("bayn.ui")
 STATIC = Path(__file__).parent / "static"
@@ -41,6 +45,8 @@ class Hub:
         self.clients: set[WebSocket] = set()
         self.last_eeg_t = 0.0          # wall time we last received EEG
         self.last_status: dict | None = None
+        self.last_events_status: dict | None = None
+        self.last_calibration: dict | None = None
 
     async def broadcast(self, msg: dict) -> None:
         dead = []
@@ -83,6 +89,25 @@ async def _relay_eeg(cfg: AppConfig, hub: Hub) -> None:
         sub.close()
 
 
+async def _relay_events(cfg: AppConfig, hub: Hub) -> None:
+    sub = ThreadedSubscriber(cfg.bus.events_host, cfg.bus.events_pub_port,
+                             [TOPIC_EVENTS_STATUS, TOPIC_EVENT, TOPIC_EVENT_DONE, TOPIC_CALIBRATION],
+                             asyncio.get_running_loop())
+    kinds = {TOPIC_EVENTS_STATUS: "trigger_status", TOPIC_EVENT: "event",
+             TOPIC_EVENT_DONE: "event_done", TOPIC_CALIBRATION: "calibration"}
+    try:
+        while True:
+            topic, m = await sub.queue.get()
+            msg = {"type": kinds[topic], **m}
+            if topic == TOPIC_EVENTS_STATUS:
+                hub.last_events_status = msg
+            elif topic == TOPIC_CALIBRATION:
+                hub.last_calibration = msg
+            await hub.broadcast(msg)
+    finally:
+        sub.close()
+
+
 async def _heartbeat(hub: Hub) -> None:
     """Lets the UI show 'no signal' when the bridge is down."""
     while True:
@@ -100,15 +125,30 @@ class InjectRequest(BaseModel):
     gesture: str
 
 
-def create_app(cfg: AppConfig | None = None) -> FastAPI:
+class TriggerRequest(BaseModel):
+    source: str = "button"          # button | hotkey
+
+
+class CalibrationRequest(BaseModel):
+    action: str = "start"           # start | cancel
+
+
+class GestureRequest(BaseModel):
+    gesture: str
+
+
+def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) -> FastAPI:
     cfg = cfg or load_config()
     hub = Hub()
     state: dict[str, Any] = {}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        state["cmd"] = CommandSender(cfg.bus.eeg_host, cfg.bus.eeg_cmd_port)
-        tasks = [asyncio.create_task(_relay_eeg(cfg, hub)), asyncio.create_task(_heartbeat(hub))]
+        state["eeg_cmd"] = CommandSender(cfg.bus.eeg_host, cfg.bus.eeg_cmd_port)
+        state["events_cmd"] = CommandSender(cfg.bus.events_host, cfg.bus.events_cmd_port)
+        state["store"] = store or EventStore()
+        tasks = [asyncio.create_task(_relay_eeg(cfg, hub)), asyncio.create_task(_relay_events(cfg, hub)),
+                 asyncio.create_task(_heartbeat(hub))]
         for t in tasks:
             t.add_done_callback(_log_task_crash)
         log.info("dashboard on http://%s:%d", cfg.ui.host, cfg.ui.port)
@@ -117,7 +157,8 @@ def create_app(cfg: AppConfig | None = None) -> FastAPI:
             t.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await t
-        state["cmd"].close()
+        state["eeg_cmd"].close()
+        state["events_cmd"].close()
 
     app = FastAPI(title="Bayn", version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
@@ -126,7 +167,12 @@ def create_app(cfg: AppConfig | None = None) -> FastAPI:
     def _hello() -> dict:
         return {"type": "hello", "version": __version__, "source": cfg.eeg.source,
                 "channels": cfg.eeg.channels, "fs": cfg.eeg.fs, "plot_seconds": cfg.ui.plot_seconds,
-                "notch": cfg.eeg.notch_hz, "bandpass": list(cfg.eeg.bandpass_hz), "gestures": list(GESTURES)}
+                "notch": cfg.eeg.notch_hz, "bandpass": list(cfg.eeg.bandpass_hz), "gestures": list(GESTURES),
+                "trigger_gestures": list(GESTURE_CHOICES), "pre_s": cfg.events.pre_s, "post_s": cfg.events.post_s}
+
+    def _send_events(payload: dict) -> None:
+        if not state["events_cmd"].send(payload):
+            raise HTTPException(503, "events service not reachable")
 
     @app.get("/")
     async def index() -> FileResponse:
@@ -145,21 +191,60 @@ def create_app(cfg: AppConfig | None = None) -> FastAPI:
     async def inject(req: InjectRequest) -> dict:
         if req.gesture not in GESTURES:
             raise HTTPException(400, f"gesture must be one of {GESTURES}")
-        ok = state["cmd"].send({"cmd": "inject", "gesture": req.gesture})
-        if not ok:
+        if not state["eeg_cmd"].send({"cmd": "inject", "gesture": req.gesture}):
             raise HTTPException(503, "EEG bridge not reachable")
         return {"queued": req.gesture}
 
+    # ---------------------------------------------------------------- events
+    @app.post("/api/events/trigger", status_code=202)
+    async def trigger(req: TriggerRequest) -> dict:
+        source = req.source if req.source in ("button", "hotkey") else "button"
+        _send_events({"cmd": "trigger", "source": source})
+        return {"queued": source}
+
+    @app.post("/api/events/calibration", status_code=202)
+    async def calibration(req: CalibrationRequest) -> dict:
+        if req.action not in ("start", "cancel"):
+            raise HTTPException(400, "action must be start or cancel")
+        _send_events({"cmd": "calibrate", "action": req.action})
+        return {"queued": req.action}
+
+    @app.post("/api/events/gesture", status_code=202)
+    async def gesture(req: GestureRequest) -> dict:
+        if req.gesture not in GESTURE_CHOICES:
+            raise HTTPException(400, f"gesture must be one of {GESTURE_CHOICES}")
+        _send_events({"cmd": "set_gesture", "gesture": req.gesture})
+        return {"queued": req.gesture}
+
+    @app.get("/api/events")
+    async def list_events(limit: int = 50) -> list[dict]:
+        return state["store"].list(min(max(limit, 1), 500))
+
+    @app.get("/api/events/{event_id}/{name}")
+    async def event_file(event_id: str, name: str) -> FileResponse:
+        if name not in FILES:
+            raise HTTPException(404)
+        try:
+            path = state["store"].dir_for(event_id) / name
+        except ValueError:
+            raise HTTPException(404) from None
+        if not path.is_file():
+            raise HTTPException(404)
+        return FileResponse(path, filename=f"{event_id}-{name}")
+
+    # ---------------------------------------------------------------- websocket
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
         await ws.accept()
         hub.clients.add(ws)
         await ws.send_json(_hello())
-        if hub.last_status:
-            await ws.send_json(hub.last_status)
+        for last in (hub.last_status, hub.last_events_status):
+            if last:
+                await ws.send_json(last)
+        await ws.send_json({"type": "event_history", "events": state["store"].list(30)})
         try:
             while True:
-                await ws.receive_text()   # client messages unused for now; keeps socket open
+                await ws.receive_text()   # client messages unused; keeps socket open
         except WebSocketDisconnect:
             pass
         finally:

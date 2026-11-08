@@ -1,4 +1,13 @@
-# Bayn
+<p align="center">
+  <img src="docs/img/bayn-logo.jpg" width="280" alt="Bayn logo: a child wearing an EEG headband, with a brainwave on one side and a transcript bubble on the other">
+</p>
+
+<h1 align="center">Bayn · بيّن</h1>
+
+<p align="center">
+  <b>Bridging the in-between. Keeping meaning clear.</b><br>
+  <span dir="rtl" lang="ar">نصلُ ما بين اللحظات، ليبقى المعنى بيّنًا</span>
+</p>
 
 **A deliberate gesture on a Muse 2 headband starts a local pipeline: the event is tagged, the EEG around it is saved, live speech is transcribed with Whisper, and a small local LLM writes a short summary. Everything runs 100% offline.**
 
@@ -14,10 +23,10 @@
 |---|---|---|
 | 1 | Repo, simulated EEG, dashboard skeleton | ✅ done |
 | 2 | Real Muse 2 (BrainFlow, muse-lsl fallback) | ✅ done |
-| 3 | Gesture trigger (jaw clench / double blink), calibration, events | ⏳ next |
+| 3 | Gesture trigger (jaw clench / double blink), calibration, events | ✅ done (double blink on real headset → ML in Phase 6) |
 | 4 | Live Whisper transcription (English / Arabic / mixed) | ⬜ |
 | 5 | Ollama summaries | ⬜ |
-| 6 | Gesture tuning on the real headset + guided "blink twice" onboarding | ⬜ |
+| 6 | Gesture tuning + guided "blink twice" onboarding + ML blink detector (EEG / EEG + accelerometer) | ⬜ |
 | 7 | Docker Compose + docs polish | ⬜ |
 | 8 | Full end-to-end test run (simulated and real) | ⬜ |
 
@@ -50,7 +59,7 @@ flowchart LR
 ```
 
 - **One message bus (ZeroMQ, TCP).** Every component is a separate process, so it works the same natively and in Docker.
-- **The trigger sits behind a `Detector` interface** (Phase 3). The jaw clench, the double blink, the manual button/hotkey and a future seizure model are interchangeable.
+- **The trigger sits behind a `Detector` interface.** The jaw clench, the double blink, the manual button/hotkey and a future seizure model are interchangeable ([seizure_stub.py](src/bayn/events/detectors/seizure_stub.py) shows where a model plugs in).
 - **No hardware assumptions.** The mains notch defaults to `auto` (measures 50 vs 60 Hz). Whisper picks GPU or CPU at startup.
 - **Brainwave view, like the Muse app.** Live delta / theta / alpha / beta / gamma per sensor, e.g. *Alpha (AF7)*. Close your eyes and watch alpha rise on TP9/TP10.
 
@@ -81,6 +90,21 @@ python -m bayn.run --demo
 ```
 
 Other commands: `test`, `doctor` (check a machine before a demo, including a Bluetooth scan), `bridge`, `ui`, `clean`.
+
+## Firing an event
+
+| Trigger | How | Notes |
+|---|---|---|
+| **Jaw clench** (default) | Clench firmly and hold for about 1 s | Muscle activity on the sensors behind the ears (TP9/TP10). Talking or swallowing is too short to fire. |
+| **Double blink** | Two firm blinks within 0.8 s | Forehead sensors (AF7/AF8). A single blink or a triple blink doesn't fire. ⚠️ On the real headset, head movement can still trigger it and gentle blinks are missed. An ML detector is planned (Phase 6). |
+| **Button / `T` key** | "Trigger event" in the dashboard | Always available as a backup. |
+
+Pick the gesture in the dashboard's **Event trigger** card (or `events.gesture` in the config). Then press **Calibrate…** once per person: 15 s of rest, then 3 prompted repetitions. The thresholds are saved per user, in `data/profiles/`. After an event, further gestures are ignored for a 15 s cooldown.
+
+Each event:
+- flashes a banner, marks the plot, and beeps (turn sound on with 🔔)
+- saves the EEG from **10 s before to 30 s after** to `data/events/<id>/` as `eeg.csv`, `eeg.npz` and `meta.json` (with before/after brainwave stats). The files are downloadable from the timeline.
+- starts the transcript and summary pipeline (Phases 4–5)
 
 ## Configuration
 
@@ -122,7 +146,8 @@ src/bayn/
   common/        config, ZeroMQ bus, message schemas
   eeg/           sources (simulated, Muse via BrainFlow / LSL), filters, ring buffer, quality,
                  brainwave bands, bridge, check (headset test)
-  events/        Detector interface + gesture detectors       (Phase 3)
+  events/        Detector interface, clench / double-blink / manual detectors, seizure stub,
+                 calibration, event manager (cooldown, EEG windows), SQLite store, service
   transcription/ faster-whisper live transcription            (Phase 4)
   summarization/ Ollama client + prompts                       (Phase 5)
   ui/            FastAPI server + static dashboard (no CDN, works offline)

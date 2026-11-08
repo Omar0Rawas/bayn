@@ -5,8 +5,8 @@ This document describes how Bayn is verified: which tests exist at each level (u
 > [!IMPORTANT]
 > Bayn is a hackathon prototype, **not a medical device**. "Validation" here means *engineering* verification and validation: does the software do what the design says, on real hardware, reliably enough for a live demo? **No clinical validation has been done, and none is claimed.**
 
-**Status:** Phases 1–2 tested and passing. Phases 3–8 have test plans with acceptance criteria, filled in as each phase lands.
-Last updated: 2026-11-08.
+**Status:** Phases 1–3 tested. On the real headset the jaw-clench trigger works; the rule-based double blink does not yet (finding F1, ML fix planned for Phase 6). Phases 4–8 have test plans with acceptance criteria, filled in as each phase lands.
+Last updated: 2026-11-09.
 
 ---
 
@@ -28,13 +28,13 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 
 | Level | Purpose | Location | Count | Runtime | Runs |
 |---|---|---|---|---|---|
-| **Unit** | One function or class in isolation. No sockets, threads or devices. | `tests/test_filters.py`, `test_buffer_quality.py`, `test_simulator.py`, `test_bands.py`, parts of `test_bus_config.py` and `test_sources.py` | 32 | ~2 s | Every `test` run |
+| **Unit** | One function or class in isolation. No sockets, threads or devices. Detector and event-manager tests stream minutes of simulated EEG through the logic offline, in seconds. | `tests/test_filters.py`, `test_buffer_quality.py`, `test_simulator.py`, `test_bands.py`, `test_detectors.py`, `test_events_manager.py`, parts of `test_bus_config.py` and `test_sources.py` | 63 | ~25 s | Every `test` run |
 | **Integration** | Several components together across real boundaries: TCP sockets, threads, asyncio, BrainFlow's native library (synthetic board), LSL networking. | `test_bus_config.py`, `test_sources.py` | 6 | ~5 s | Every `test` run |
-| **System** | The real `bridge` and `dashboard` *processes*, end to end, driven like a browser would (WebSocket + REST). Simulated EEG. | `tests/test_system.py` | 2 | ~10 s | Every `test` run |
+| **System** | The real `bridge`, `events` and `dashboard` *processes*, end to end, driven like a browser would (WebSocket + REST). Simulated EEG. | `tests/test_system.py` | 5 | ~45 s | Every `test` run |
 | **Hardware-in-the-loop** | The real Muse 2 over Bluetooth, through both acquisition paths. | `tests/test_hardware.py` | 2 | ~45 s | On demand, with headset |
 | **Manual acceptance** | A human checks the dashboard, ergonomics and demo flow against a checklist. | §4 (per phase), §6 | – | minutes | End of each phase |
 
-### 2.1 Unit tests (32)
+### 2.1 Unit tests (63)
 
 | Area | Test | Verifies |
 |---|---|---|
@@ -59,6 +59,25 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 | | `test_mains_hum_not_counted_as_gamma` | strong 60 Hz hum adds < 5 % to gamma (gamma stops at 44 Hz) |
 | | `test_simulated_eeg_alpha_on_temporal_and_clench_raises_gamma` | a jaw clench raises TP9/TP10 gamma > 3× |
 | | `test_bands_message_roundtrips_over_bus` | band payload survives serialization, shape 4 × 5 |
+| Detectors: interface | `test_detector_contract[clench/double_blink/manual/seizure_stub]` | every `Detector` (including the seizure stub) honours the same contract: list of `Detection`, `status()` keys, `reset()` |
+| | `test_seizure_stub_never_fires`, `test_factory_follows_gesture_setting` | stub is inert; `events.gesture` selects detectors; invalid gesture rejected |
+| Detectors: clench | `test_clench_detection_rate_and_onset_accuracy` | 30 injected clenches over 3 seeds (50 and 60 Hz mains): ≥ 95 % detected, 0 false, onset error ≤ 0.5 s |
+| | `test_clench_needs_hold_time`, `test_clench_fires_once_per_clench` | bursts shorter than `hold_s` never fire; one clench = one detection |
+| Detectors: double blink | `test_double_blink_detection_rate` | 30 injected double blinks over 3 seeds, natural blinks + muscle bursts on: ≥ 90 % detected, 0 false |
+| | `test_single_blinks_do_not_fire`, `test_rebound_is_not_a_third_blink` | single blinks ignored; regression for D9 |
+| False triggers | `test_no_false_triggers_in_10_minutes_of_distractors[clench/double_blink]` | 10 min of natural blinks and short muscle bursts, no deliberate gesture: ≤ 1 trigger |
+| | `test_gestures_dont_cross_trigger` | clenches never fire the blink detector and vice versa |
+| Calibration | `test_calibration_separates_rest_and_gesture[clench/double_blink]` | rest level < threshold < gesture level, quality `good` |
+| | `test_calibration_fails_without_gesture`, `test_profile_threshold_applied` | no gesture → `failed`/`weak`, nothing saved; profile thresholds load |
+| Event manager | `test_gesture_creates_event_and_saves_exact_window` | event within 0.5 s of the true onset; saved window = 40 s ± 1 sample (−10/+30 s); `.npz`, `.csv` and `meta.json` written; before/after stats present; SQLite row `saved` |
+| | `test_cooldown_suppresses_second_gesture` | a second clench 6 s later (cooldown 15 s) is ignored and counted |
+| | `test_manual_trigger_debounce_and_cooldown_interaction` | button/hotkey debounced at 2 s; manual trigger is not blocked by the gesture cooldown |
+| | `test_manual_event_finalizes_by_wall_clock_without_eeg` | an event without EEG still completes (marked partial) |
+| | `test_event_right_after_connect_is_marked_partial` | a short pre-window is flagged as partial |
+| | `test_manual_only_mode_ignores_gestures`, `test_set_gesture_at_runtime` | gesture choice works, including switching at runtime |
+| | `test_guided_calibration_end_to_end[clench/double_blink]` | rest → 3 prompted reps (simulator performs them) → thresholds saved to the profile → a restarted manager loads them; no events fire while calibrating |
+| | `test_calibration_cancel`, `test_calibration_needs_a_gesture` | cancel works; manual-only mode can't calibrate |
+| | `test_store_rejects_path_traversal` | event IDs can't escape the data folder |
 | Bus / config | `test_pack_roundtrip_ndarray`, `test_schema_roundtrip` | msgpack + NumPy and message schemas survive serialization |
 | | `test_env_overrides_typed`, `test_bad_notch_rejected` | `BAYN_*` overrides get the right types; invalid values rejected |
 | Sources | `test_sample_clock_regularises_jitter` | ±20 ms packet jitter → perfectly regular timeline |
@@ -76,11 +95,14 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 | `test_lsl_source_selects_channels_by_label[lsl-clock]` | our LSL source + a real LSL outlet | channels picked by label in config order; LSL-clock → unix |
 | `test_lsl_source_selects_channels_by_label[unix-clock-like-muselsl]` | same, muse-lsl timestamp style | **regression for defect D5** |
 
-### 2.3 System tests (2)
+### 2.3 System tests (5)
 
 | Test | Verifies |
 |---|---|
 | `test_end_to_end_simulated_pipeline` | Starts the bridge and dashboard as separate processes on free ports, connects over WebSocket like the browser, and checks: `hello` handshake; ~256 samples/s arrive in 4 channels (6–11 s of data in 9 s); per-channel quality reported for TP9/AF7/AF8/TP10; **mains detected as 60 Hz when the simulator injects 60 Hz** (detected, not assumed); a REST `double_blink` injection makes the full round trip back to the browser; brainwave band updates arrive at ~2 Hz (5 bands, relative powers sum to 1). |
+| `test_gesture_event_saved_and_downloadable` | Bridge + events + dashboard processes: a clench injected through the REST API fires an `event` in the browser stream < 2.5 s later (1 s hold included); `event_done` arrives with exactly the configured window (−2/+3 s in the test); the CSV downloads over HTTP; `/api/events` lists it. |
+| `test_manual_trigger_and_hotkey` | `POST /api/events/trigger {source: hotkey}` → a `manual` event with source `hotkey` reaches the browser. |
+| `test_guided_calibration_with_simulator` | `POST /api/events/calibration` → prompts stream to the browser; the simulator performs each prompted clench; calibration ends `done` with quality `good`. |
 | `test_bad_gesture_rejected` | The REST API rejects an invalid gesture with HTTP 400. |
 
 ### 2.4 Hardware-in-the-loop tests (2)
@@ -141,17 +163,31 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 
 **Acceptance criteria:** real Muse is the default source ✅ · both acquisition paths deliver 256 Hz with correct channel order and unix timestamps ✅ · signal quality visible ✅ · dashboard shows connection progress instead of crashing ✅ · reconnects automatically ⏳ (implemented, manual test pending)
 
-### Phase 3: Gesture trigger + events (planned)
+### Phase 3: Gesture trigger + events ✅ (simulated, clench on real headset) · ❌ double blink on real headset (F1)
 
-| Planned activity | Level | Acceptance criterion |
-|---|---|---|
-| `Detector` interface contract: every detector (clench, double blink, manual, seizure stub) passes one shared test | Unit | all pass |
-| Clench and double-blink detectors on simulated data with injected gestures (known ground truth) | Unit | ≥ 95 % of injected gestures detected; onset error ≤ 0.5 s |
-| False triggers on simulated distractors (natural blinks, short EMG bursts), 10 min of signal | Unit | ≤ 1 false trigger per 10 min |
-| Cooldown | Unit | a second gesture inside the cooldown never fires |
-| Calibration from rest + 3 gestures sets thresholds between the two distributions | Unit | thresholds saved per user and reloaded |
-| Event window saved −10 s / +30 s | Integration | saved file holds exactly 40 s ± 1 sample, correct timestamps |
-| Gesture → event → UI (visual + audio feedback), manual button + hotkey | System | event visible in the timeline < 1.5 s after the gesture |
+**Goal:** a deliberate gesture (or button/hotkey) fires a timestamped event with visual and audio feedback. The EEG window −10/+30 s is saved, the pipeline is notified, and everything goes through a `Detector` interface a seizure model can plug into.
+
+**Simulated-data evaluation** (development sweep, then locked into the unit tests). Gestures injected at known times into simulated EEG with natural blinks and short muscle bursts as distractors:
+
+| Detector | Detected | False triggers | Signal time | Onset error |
+|---|---|---|---|---|
+| Jaw clench (55–100 Hz RMS, hold 1 s, adaptive threshold) | **40 / 40** | **0** | 20.7 min | +0.11 s (max +0.13 s) |
+| Double blink, first version (0.5–10 Hz, abs. value, 110 µV) | 13 / 40 | 0 | 20.7 min | – |
+| Double blink, final (0.3–10 Hz, signed peaks, 90 µV) | **58 / 60 (97 %)** | **0** | 62 min | +0.12 s |
+
+| Activity | Level | Acceptance criterion | Result |
+|---|---|---|---|
+| `Detector` contract: clench, double blink, manual, seizure stub | Unit | all pass the same test | ✅ |
+| Detection rate on simulated data | Unit | ≥ 95 % (clench), ≥ 90 % (double blink, sim); onset ≤ 0.5 s | ✅ 100 % / 97 %, ≤ 0.13 s |
+| False triggers, 10 min of distractors | Unit | ≤ 1 per 10 min | ✅ 0 |
+| Cooldown + manual debounce | Unit | gesture inside cooldown never fires | ✅ |
+| Calibration: rest + 3 reps → threshold between the distributions, saved and reloaded | Unit + System | quality `good`, profile persists across restart | ✅ |
+| EEG window −10/+30 s | Unit | 40 s ± 1 sample, `.npz` + `.csv` + `meta.json` | ✅ |
+| Gesture → event in the browser, manual button + hotkey, calibration over REST | System | event < 1.5 s after the gesture ends its 1 s hold | ✅ < 2.5 s from injection (= 1 s hold + ≤ 0.2 s processing) |
+| Demo mode (`.\bayn demo`): scripted clench at 15 s → event → window saved | System (manual run) | works with no hardware | ✅ event at 14.9 s, window saved, no errors in any process log |
+| Visual banner + plot marker + beep, event timeline, downloads | Manual | seen and heard in the browser | ✅ user, 2026-11-09 |
+| Real headset (Muse-3EE1): **jaw clench**, before and after calibration | Hardware (manual) | fires on a deliberate clench, not otherwise | ✅ user: "fine before and after calibration" |
+| Real headset: **double blink** | Hardware (manual) | fires on a double blink, not on other activity | ❌ user: **false triggers from head movements**; **natural-strength double blinks missed**, only very deliberate ones detected → finding F1, addressed in Phase 6 |
 
 ### Phase 4: Whisper live transcription (planned)
 
@@ -172,7 +208,22 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 | Scripted scenarios: summary covers the facts in the transcript and invents none | Manual | reviewed on ≥ 5 scenarios in English and Arabic |
 | Event → summary streamed into the UI | System | first tokens < 5 s after the event window closes (GPU) |
 
-### Phase 6: Gesture tuning on the real headset (planned)
+### Phase 6: Gesture tuning on the real headset + ML blink detector (planned)
+
+**ML double-blink detector** (answers finding F1). One amplitude threshold can't separate natural blinks from head-movement artefacts, because their amplitudes overlap. The plan:
+
+1. **Guided labelled recording, about 3 min:** blink twice, blink once, turn head, nod, look left/right, talk, rest. Each prompt labels its time window. This is also the Muse-app-style onboarding.
+2. **Candidates:** every forehead peak above a *low* threshold. Features: shape/width, peak count and gap, AF7/AF8 symmetry, TP9/TP10 involvement, slow-drift and muscle-band energy.
+3. **Model:** a scikit-learn random forest with classes double blink / single blink / movement / other, saved per user. Runs offline on CPU.
+4. **Two variants, compared:** **EEG only**, which mirrors what a real future device may offer, and **EEG + Muse accelerometer**.
+5. **`MLDoubleBlinkDetector` behind the `Detector` interface**, with the rule-based detector as fallback. This is also the dry run for plugging in a seizure model.
+
+| Planned activity | Acceptance criterion |
+|---|---|
+| Labelled recording session completes and saves labelled windows | ≥ 20 double blinks, ≥ 20 single blinks, ≥ 20 movements per session |
+| Held-out evaluation (session-wise split): rule vs ML (EEG) vs ML (EEG + accel) | report precision, recall, false triggers/min, confusion matrix |
+| ML (EEG only) vs rule-based on the user's data | higher recall at ≤ the rule's false-trigger rate |
+| Simulator gains head-movement artefacts | the rule-based detector's false triggers are reproducible in tests; ML fixes them |
 
 Protocol, per tester, headset on, after calibration:
 
@@ -218,7 +269,14 @@ Protocol, per tester, headset on, after calibration:
 | Signal-quality display | quality unit tests, system test, hardware `check` | ✅ |
 | Brainwave bands δ θ α β γ per sensor, Muse-app style (user request) | band unit tests, system test, live headset run | ✅ |
 | Guided onboarding / calibration (user request) | Phase 6 plan | ⏳ |
-| Gesture trigger, calibration, cooldown, `Detector` interface | Phase 3 plan | ⏳ |
+| Gesture trigger: jaw clench / double blink, configurable | detector unit tests, system test, demo run, user test | ✅ sim · ✅ clench on real headset · ❌ double blink on real headset (F1 → Phase 6) |
+| Per-user calibration | calibration unit + system tests, user test | ✅ sim · ✅ clench on real headset |
+| Cooldown against false triggers | `test_cooldown_suppresses_second_gesture`, false-trigger tests | ✅ |
+| Visual + audio feedback | manual (banner, plot marker, Web Audio beep) | ⏳ user |
+| Timestamped event + EEG window −10/+30 s saved | event manager unit tests, system test | ✅ |
+| Event starts the pipeline (transcript + summary) | `events.done` message published (system test); consumers arrive in Phases 4–5 | partial ✅ |
+| UI button + hotkey backup trigger | `test_manual_trigger_and_hotkey` | ✅ |
+| `Detector` interface ready for a seizure detector | `test_detector_contract[seizure_stub]` | ✅ |
 | Whisper live transcription, en / ar / mixed | Phase 4 plan | ⏳ |
 | Local LLM summaries | Phase 5 plan | ⏳ |
 | Docker Compose | Phase 7 plan | ⏳ |
@@ -238,6 +296,15 @@ Protocol, per tester, headset on, after calibration:
 | D6 | Hardware | `ctypes.ArgumentError` printed when stopping during a BLE search | Worker thread still in a blocking connect at interpreter exit | Silent exit when stopping; `stop()` waits for the connect to finish | manual |
 | D7 | Hardware (test bug) | BrainFlow latency looked like 7.9 s | Test read the clock after the ~8 s BLE release | Measure latency at receive time | `test_muse_via_brainflow` |
 | D8 | Manual (user) | `.\scripts\bayn.ps1` refused to run: "running scripts is disabled on this system" | Windows' default PowerShell execution policy blocks `.ps1` files | `bayn.cmd` wrapper runs it with `-ExecutionPolicy Bypass` for that call only | manual |
+| D9 | Unit (detector sweep) | Double blink detected only 13/40 | Three causes: gave up on the 1st blink after 0.45 s although gaps go to 0.8 s; the band-pass rebound after each blink counted as a 3rd blink (absolute value); 110 µV threshold above many filtered deliberate blinks | Wait `max_gap_s` for a 2nd blink; signed peaks with pair polarity; merge peaks closer than `min_gap_s`; 0.3 Hz low cut; 90 µV default → 58/60 | `test_double_blink_detection_rate`, `test_rebound_is_not_a_third_blink` |
+| D10 | System | Event fired right after start saved a short window without saying so | Pre-event data did not exist yet | Window flagged `partial` when shorter than expected | `test_event_right_after_connect_is_marked_partial` |
+| D11 | Manual run | Demo mode's scripted double blinks never fired an event | Demo alternates clench / double blink, but the default trigger gesture is clench only | Demo mode listens to both gestures | demo run |
+
+### Findings (performance limitations, not bugs)
+
+| ID | Found by | Finding | Likely cause | Plan |
+|---|---|---|---|---|
+| F1 | Hardware, user test 2026-11-09 | Rule-based double blink: head movements cause false triggers; natural-strength double blinks are missed | Movement artefacts and blinks overlap in amplitude on AF7/AF8; calibration "rest" includes natural blinks, which pushes the threshold up | Phase 6: ML detector (EEG only and EEG + accelerometer), evaluated against the rule on labelled real data. Until then, **jaw clench** is the recommended trigger |
 
 ### Environment issues (not software defects)
 
@@ -253,5 +320,7 @@ Protocol, per tester, headset on, after calibration:
 
 - Automatic reconnect after a real headset drop-out: implemented and unit-tested via the clock and gap logic, **not yet exercised with the real headset** (manual test pending).
 - Signal-quality thresholds are initial values. They get re-tuned with real data in Phase 6.
+- Gesture detection performance is so far measured on **simulated** gestures only. The simulator's clench and blink shapes are educated guesses; the real-headset numbers come from the Phase 6 protocol.
+- Audio feedback needs one click on the page first (browser autoplay rule). The 🔇/🔔 button does that.
 - Hardware tests have only run on the dev PC. They must be repeated on the demo laptop.
 - The dashboard UI has no automated browser tests. It is checked manually.

@@ -36,10 +36,10 @@ class StreamingFilter:
     """
 
     def __init__(self, fs: float, n_channels: int, band: tuple[float, float] | None = (1.0, 40.0),
-                 notch: str = "auto", order: int = 4) -> None:
+                 notch: str = "auto", order: int = 4, extra_notches: tuple[float, ...] = ()) -> None:
         self.fs = fs
         self.n_channels = n_channels
-        self.notches = notch_frequencies(notch, fs)
+        self.notches = notch_frequencies(notch, fs) + [f for f in extra_notches if f < fs / 2]
         self.sos = design_sos(fs, band, self.notches, order)
         self._zi_unit = sosfilt_zi(self.sos)            # (n_sections, 2)
         self._zi: np.ndarray | None = None

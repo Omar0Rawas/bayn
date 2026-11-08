@@ -83,11 +83,54 @@ class SimulatorConfig(BaseModel):
     auto_gestures: AutoGestures = AutoGestures()
 
 
+class ClenchConfig(BaseModel):
+    band_hz: tuple[float, float] = (55.0, 100.0)
+    window_s: float = 0.25
+    hold_s: float = 1.0
+    threshold_uv: float | None = None
+    baseline_k: float = 4.0
+    min_threshold_uv: float = 8.0
+
+
+class DoubleBlinkConfig(BaseModel):
+    band_hz: tuple[float, float] = (0.3, 10.0)
+    threshold_uv: float | None = None
+    default_threshold_uv: float = 90.0
+    min_gap_s: float = 0.2
+    max_gap_s: float = 0.8
+    max_width_s: float = 0.6
+    settle_s: float = 0.45
+
+
+class CalibrationConfig(BaseModel):
+    rest_s: float = 15.0
+    reps: int = 3
+    ready_s: float = 2.0
+    do_s: float = 3.0
+    release_s: float = 3.0
+    auto_inject_sim: bool = True
+
+
+class EventsConfig(BaseModel):
+    gesture: Literal["clench", "double_blink", "both", "manual"] = "clench"
+    cooldown_s: float = 15.0
+    manual_debounce_s: float = 2.0
+    pre_s: float = 10.0
+    post_s: float = 30.0
+    profile: str = "default"
+    clench: ClenchConfig = ClenchConfig()
+    double_blink: DoubleBlinkConfig = DoubleBlinkConfig()
+    calibration: CalibrationConfig = CalibrationConfig()
+
+
 class BusConfig(BaseModel):
     bind_host: str = "127.0.0.1"
     eeg_host: str = "127.0.0.1"
     eeg_pub_port: int = 5555
     eeg_cmd_port: int = 5556
+    events_host: str = "127.0.0.1"
+    events_pub_port: int = 5560
+    events_cmd_port: int = 5561
 
 
 class UIConfig(BaseModel):
@@ -104,6 +147,7 @@ class LoggingConfig(BaseModel):
 class AppConfig(BaseModel):
     eeg: EEGConfig = EEGConfig()
     simulator: SimulatorConfig = SimulatorConfig()
+    events: EventsConfig = EventsConfig()
     bus: BusConfig = BusConfig()
     ui: UIConfig = UIConfig()
     logging: LoggingConfig = LoggingConfig()
