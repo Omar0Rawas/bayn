@@ -1,0 +1,64 @@
+{
+  "_about": "Realistic scenario recorded live by the user on 2026-11-09 (dev PC, GoXLR mic, Whisper large-v3-turbo on GPU, language mode 'mixed', manual trigger, -10/+30 s window). A teacher explains evaporation. 'reference' is the script that was read aloud; 'live_transcript' is exactly what Bayn produced. Used to (1) score transcription strategies (WER/CER) and (2) test summarization on imperfect, real transcripts (Phase 5). No audio is stored here.",
+  "variants": {
+    "english": {
+      "language": "en",
+      "reference": "Okay everyone, eyes on the board, please. Yesterday we left a cup of water by the window. Remember what happened? That's right, the water level went down. But where did the water go? Did it just disappear? No! The sun heated the water and turned it into vapor, and the vapor went up into the air. That's called evaporation. Say it with me: evaporation. Great job! Now, think about this: what happens when that vapor gets cold up in the sky?",
+      "live_transcript": [
+        "[-007.1 s] (en) I talked about Black Clover",
+        "[-005.2 s] (en) Wait",
+        "[-004.0 s] (en) Uh, okay.",
+        "[+000.8 s] (en) okay everyone eyes on the board please yesterday we left a cup of water by the window remember",
+        "[+005.5 s] (en) what happened that's right the water level went down where did the water go did it just disappear",
+        "[+011.2 s] (en) no the sun heated the water and turned it into vapor",
+        "[+014.4 s] (en) and the vapor went up into the air that's called evaporation say it with me evaporation great job",
+        "[+022.2 s] (en) Now think about this, what happens when that vapor gets cold up in the sky?"
+      ],
+      "notes": "Lines before 0 s are unrelated chatter before the reading started (real-world noise the summary must ignore or treat as context).",
+      "scores_2026_11_09": {"wer": 0.012, "cer": 0.009}
+    },
+    "arabic": {
+      "language": "ar",
+      "dialect": "Hejazi (Saudi) mixed with MSA",
+      "reference": "طيب يا شباب، كلكم عيونكم على السبورة. أمس حطينا كاسة موية جنب الشباك، فاكرين إيش صار لها؟ أيوه، مستوى الماءِ انخفض. بس طيب، فين راحت الموية؟ اختفت كدا؟ لا! حرارةُ الشمسِ تُسخّنُ الماءَ فيتحوّلُ إلى بخارٍ يصعدُ إلى الهواء، وهذه العمليةُ تُسمّى التبخّر. يلا كلنا نقولها مع بعض: التبخّر. ممتاز! طيب دحين فكروا معايا: إيش تتوقعوا يصير لما البخار يبرد فوق في السما؟",
+      "live_transcript": [
+        "[+001.7 s] (ar) طيب يا شباب كلكم يعيونكم على السبورة",
+        "[+004.2 s] (ar) امس حطينا كاسة موية جنب الشباك",
+        "[+007.2 s] (ar) فاكرينيش صر لها",
+        "[+008.6 s] (ar) ايوه مستوى الماء انخفض",
+        "[+011.0 s] (ar) طيب فرحت الموية",
+        "[+012.8 s] (ar) اختفت كده",
+        "[+014.3 s] (ar) لا، حراط الشمس تسخر الموية فيتحول لبخار",
+        "[+018.8 s] (ar) بعدين يصعد للهوى وهذه العملية تسمى التبخر",
+        "[+022.2 s] (ar) يلا كلنا نقولها مع بعض",
+        "[+024.2 s] (ar) التبخر ممتاز",
+        "[+026.2 s] (ar) طيب نحن فكروا معايا",
+        "[+028.2 s] (ar) ايش توقعوا يصير لما البخار"
+      ],
+      "notes": "The last words ('يبرد فوق في السما') were spoken after the +30 s window end and were cut off.",
+      "scores_2026_11_09": {"wer": 0.288, "cer": 0.120, "scored_on": "reference up to 'البخار' (inside the window)"}
+    },
+    "mixed": {
+      "language": "ar+en (intra-sentence code-switching)",
+      "reference": "Okay يا شباب, eyes on the board please. Yesterday حطينا a cup of water جنب الشباك. فاكرين إيش صار لها؟ Yes, the water level نزل. بس where did the water go? اختفت كدا؟ No! The sun heated the water وصارت vapor, وطلعت up في الهوا. This is called evaporation, يعني التبخّر. Say it with me: evaporation! Great job! طيب دحين, think about this: what happens لما الـ vapor يبرد up in the sky?",
+      "live_transcript": [
+        "[-004.4 s] (en) What?",
+        "[+000.5 s] (en) Okay shabab, eyes on the board please. Yesterday, we put a cup of water next to the shubak.",
+        "[+006.5 s] (en) Do you think what happened?",
+        "[+008.1 s] (en) Yes, the water level nizzled.",
+        "[+011.1 s] (ar) Where did the water go?",
+        "[+012.7 s] (ar) اختفت كده?",
+        "[+014.1 s] (ar) No, the sun heated the water",
+        "[+016.4 s] (ar) وصارت vapor",
+        "[+018.0 s] (ar) وطلعت أب في الهوى",
+        "[+019.9 s] (en) That's called evaporation.",
+        "[+022.4 s] (ar) يعني التبخر",
+        "[+023.9 s] (ar) say it with me",
+        "[+025.4 s] (ar) evaporation",
+        "[+027.7 s] (ar) طيب دحين، اتكلم عن هذا"
+      ],
+      "notes": "Utterances forced to English translated/transliterated the Arabic ('فاكرين إيش صار لها' -> 'Do you think what happened?', 'شباب' -> 'shabab'). Utterances forced to Arabic mostly kept English words in Latin script.",
+      "scores_2026_11_09": {"wer": 0.397, "cer": 0.328, "scored_on": "reference up to 'what happens' (inside the window)"}
+    }
+  }
+}

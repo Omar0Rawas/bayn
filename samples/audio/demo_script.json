@@ -1,0 +1,14 @@
+{
+  "_note": "Fictional narration for the demo (an observer describing an episode, switching between English and Arabic). Edit freely, then run: .\\bayn sample-audio",
+  "demo": [
+    {"lang": "en", "text": "Okay, it is ten fifteen in the morning. He was reading, and then he suddenly stopped."},
+    {"lang": "ar", "text": "الآن لا يرد عندما أناديه، وعيناه تنظران إلى الأمام."},
+    {"lang": "en", "text": "His right hand is making small repeated movements. I am timing it now."},
+    {"lang": "ar", "text": "مرت تقريبا ثلاثون ثانية. لا يوجد سقوط، وهو جالس على الكرسي."},
+    {"lang": "en", "text": "The movements are slowing down. He is blinking and looking around."},
+    {"lang": "ar", "text": "يقول إنه متعب قليلا ولا يتذكر ما حدث."},
+    {"lang": "en", "text": "It lasted about one minute in total. He is breathing normally and talking again."}
+  ],
+  "en_short": {"lang": "en", "text": "Please write down the time. The episode started a moment ago."},
+  "ar_short": {"lang": "ar", "text": "بدأت النوبة قبل دقيقة، وهو الآن يتنفس بشكل طبيعي."}
+}

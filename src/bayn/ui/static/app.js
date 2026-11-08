@@ -281,8 +281,10 @@ function renderTimeline() {
   $("timeline").innerHTML = list.map((m) => {
     const saved = m.state === "saved";
     const pct = saved ? 100 : Math.min(100, (100 * (now - m.t)) / m.post_s);
-    const links = saved && m.files
-      ? `<a href="/api/events/${m.id}/eeg.csv" download>EEG .csv</a> <a href="/api/events/${m.id}/eeg.npz" download>.npz</a>` : "";
+    const tr = m.transcript;
+    const links = (saved && m.files
+      ? `<a href="/api/events/${m.id}/eeg.csv" download>EEG .csv</a> <a href="/api/events/${m.id}/eeg.npz" download>.npz</a>` : "")
+      + (tr ? ` <a href="/api/events/${m.id}/transcript.txt" download>🗣 transcript (${tr.n_segments})</a>` : "");
     const detail = m.info && m.info.gap_s ? ` · gap ${m.info.gap_s}s` : "";
     return `<li>
       <div class="tl-head"><b>${m.label}${SOURCE_TEXT[m.source] || ""}</b><time>${fmtTime(m.t)}</time></div>
@@ -340,6 +342,64 @@ function renderCalibration(m) {
       <span class="muted">rest ${r.rest_level.toFixed(1)} · gesture ${r.gesture_level.toFixed(1)} · threshold ${r.threshold.toFixed(1)} µV (×${r.separation.toFixed(1)})</span></div>`).join("") : "";
 }
 
+// ------------------------------------------------------------------ transcript
+const transcript = { ids: new Set() };
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function inAnyEvent(t) {
+  for (const e of events.values()) if (t >= e.t - e.pre_s && t <= e.t + e.post_s) return true;
+  return false;
+}
+
+function addSegment(s) {
+  if (transcript.ids.has(s.id)) return;
+  transcript.ids.add(s.id);
+  const list = $("transcript");
+  const stick = list.scrollHeight - list.scrollTop - list.clientHeight < 40;     // auto-scroll if at bottom
+  const li = document.createElement("li");
+  li.className = inAnyEvent(s.t_start) ? "in-event" : "";
+  li.innerHTML = `<time>${fmtTime(s.t_start)}</time><span class="lang ${s.lang}">${(s.lang || "?").toUpperCase()}</span>
+    <span class="text" lang="${s.lang}" dir="auto">${escapeHtml(s.text)}</span>`;
+  li.title = `latency ${s.latency_s ?? "?"} s · language confidence ${Math.round((s.lang_prob || 0) * 100)}%`;
+  list.appendChild(li);
+  while (list.children.length > 200) list.removeChild(list.firstChild);
+  if (stick) list.scrollTop = list.scrollHeight;
+  $("transcript-empty").style.display = "none";
+}
+
+function renderSttStatus(m) {
+  const badge = $("stt-model");
+  if (m.state === "error") {
+    badge.className = "badge bad-badge"; badge.textContent = "transcription off";
+    badge.title = m.message; $("partial").textContent = "⚠ " + m.message;
+    return;
+  }
+  if (m.state === "loading") { badge.textContent = "loading model…"; return; }
+  badge.className = "badge";
+  badge.textContent = `${m.model} · ${m.device === "cuda" ? "GPU" : "CPU"}`;
+  badge.title = `compute ${m.compute_type}, beam ${m.beam_size}` +
+    (m.last_latency_s != null ? `, last latency ${m.last_latency_s.toFixed(2)} s` : "") +
+    (m.fallback ? `\nGPU not used: ${m.fallback}` : "");
+  const sel = $("language");
+  if (document.activeElement !== sel && sel.value !== m.language) sel.value = m.language;
+}
+
+function renderAudioLevel(m) {
+  // map -60..0 dBFS to 0..100 %
+  $("mic-level").style.width = Math.max(0, Math.min(100, ((m.rms_db + 60) / 60) * 100)) + "%";
+}
+
+function renderAudioStatus(m) {
+  $("mic-dot").className = "mic-dot " + (m.ok ? "ok" : "bad");
+  $("mic-name").textContent = m.ok ? (m.source === "file" ? "file: " : "") + m.device : (m.message || "no audio");
+  $("mic-name").title = $("mic-name").textContent;
+}
+
+function onTranscriptWindow(m) {
+  const e = events.get(m.event_id);
+  if (e) { e.transcript = { n_segments: m.n_segments, languages: m.languages }; renderTimeline(); }
+}
+
 async function post(url, body) {
   try {
     const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -373,6 +433,13 @@ function connect(delay = 500) {
         for (const e of m.events) events.set(e.id, e);
         renderTimeline();
         break;
+      case "transcript": addSegment(m); break;
+      case "transcript_history": m.segments.forEach(addSegment); break;
+      case "transcript_partial": $("partial").textContent = m.done ? "" : (m.text ? "… " + m.text : ""); break;
+      case "transcript_status": renderSttStatus(m); break;
+      case "transcript_window": onTranscriptWindow(m); break;
+      case "audio_level": renderAudioLevel(m); break;
+      case "audio_status": renderAudioStatus(m); break;
       case "heartbeat":
         if (m.eeg_age_s !== null && m.eeg_age_s <= 2) setConn("live", "EEG live");
         else setConn("down", state.statusMsg ? capitalize(state.statusMsg)
@@ -402,6 +469,7 @@ document.addEventListener("keydown", (e) => {
 });
 $("btn-trigger").addEventListener("click", () => post("/api/events/trigger", { source: "button" }));
 $("gesture").addEventListener("change", (e) => post("/api/events/gesture", { gesture: e.target.value }));
+$("language").addEventListener("change", (e) => post("/api/transcription/language", { language: e.target.value }));
 $("btn-calibrate").addEventListener("click", () => post("/api/events/calibration", { action: "start" }));
 $("cal-cancel").addEventListener("click", () => post("/api/events/calibration", { action: "cancel" }));
 $("cal-close").addEventListener("click", () => { $("cal-overlay").hidden = true; });

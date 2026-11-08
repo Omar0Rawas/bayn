@@ -4,6 +4,7 @@ Per event folder:
   eeg.npz    raw + filtered EEG (µV), timestamps, channels, fs, event time
   eeg.csv    filtered EEG as CSV (time relative to the event, one column per sensor)
   meta.json  detector, timing, EEG stats
+  transcript.txt / transcript.json   speech in the window (added by the transcription service)
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from bayn.common.config import DATA_DIR
 
 ID_RE = re.compile(r"^evt-\d{8}-\d{6}-\d{3}$")
 FILES = ("eeg.npz", "eeg.csv", "meta.json")
+DOWNLOADABLE = FILES + ("transcript.txt", "transcript.json", "summary.md", "summary.json")
 
 
 class EventStore:
@@ -58,7 +60,8 @@ class EventStore:
         np.savetxt(d / "eeg.csv", np.column_stack([rel, filt.T]), delimiter=",", header=header,
                    comments="", fmt=["%.4f"] + ["%.2f"] * len(channels))
         files = {name: f"events/{meta['id']}/{name}" for name in FILES}
-        meta = {**meta, "files": files}
+        prev = self.get(meta["id"]) or {}            # keep fields other services already added
+        meta = {**prev, **meta, "files": {**prev.get("files", {}), **files}}
         (d / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         self.upsert(meta)
         return files

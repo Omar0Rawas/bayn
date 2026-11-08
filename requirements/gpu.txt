@@ -1,0 +1,4 @@
+# NVIDIA GPU acceleration for Whisper (CUDA 12 + cuDNN 9 runtime libraries, ~1 GB).
+# Installed by setup only when an NVIDIA GPU is detected (Windows / Linux). Not needed on CPU-only machines or macOS.
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.28.1.4

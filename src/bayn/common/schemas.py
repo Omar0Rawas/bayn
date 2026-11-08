@@ -18,6 +18,16 @@ TOPIC_EVENT = "events.event"                 # an event fired (recording its pos
 TOPIC_EVENT_DONE = "events.done"             # EEG window saved + stats ready -> starts transcript/summary
 TOPIC_CALIBRATION = "events.calibration"     # calibration prompts, progress, result
 
+TOPIC_AUDIO_PCM = "audio.pcm"                # 16 kHz mono int16 chunks
+TOPIC_AUDIO_LEVEL = "audio.level"            # ~10 Hz mic level (dBFS)
+TOPIC_AUDIO_STATUS = "audio.status"          # ~1 Hz source / device / errors
+TOPIC_TRANSCRIPT = "transcript.segment"      # a final, timestamped transcript segment
+TOPIC_TRANSCRIPT_PARTIAL = "transcript.partial"  # in-progress text of the current utterance
+TOPIC_TRANSCRIPT_STATUS = "transcript.status"    # model, device, language, latency
+TOPIC_TRANSCRIPT_WINDOW = "transcript.window"    # transcript attached to an event window
+
+AUDIO_SR = 16000                             # Whisper's sample rate
+
 GESTURES = ("clench", "double_blink", "blink")
 
 
@@ -51,6 +61,29 @@ class EEGChunk:
     def from_msg(cls, m: dict) -> "EEGChunk":
         return cls(t0=m["t0"], fs=m["fs"], channels=list(m["channels"]),
                    data=np.asarray(m["data"], dtype=np.float32), seq=m.get("seq", 0))
+
+
+@dataclass(slots=True)
+class AudioChunk:
+    """Mono audio at AUDIO_SR. samples: float32 in [-1, 1]; sent as int16 on the bus."""
+
+    t0: float                 # unix time of the first sample
+    samples: np.ndarray
+    sr: int = AUDIO_SR
+    seq: int = 0
+
+    @property
+    def t_end(self) -> float:
+        return self.t0 + len(self.samples) / self.sr
+
+    def to_msg(self) -> dict:
+        pcm = np.clip(self.samples * 32767.0, -32768, 32767).astype(np.int16)
+        return {"t0": self.t0, "sr": self.sr, "pcm": pcm, "seq": self.seq}
+
+    @classmethod
+    def from_msg(cls, m: dict) -> "AudioChunk":
+        return cls(t0=m["t0"], samples=np.asarray(m["pcm"], dtype=np.float32) / 32768.0,
+                   sr=m.get("sr", AUDIO_SR), seq=m.get("seq", 0))
 
 
 @dataclass(slots=True)

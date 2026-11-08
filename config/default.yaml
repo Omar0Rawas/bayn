@@ -71,14 +71,48 @@ events:
     release_s: 3
     auto_inject_sim: true  # in simulated mode the simulator performs the prompted gestures
 
+audio:
+  source: mic              # mic (live microphone, default) | file (WAV played in real time)
+  device: null             # null = system default input; or part of the device name, or its index
+  file: samples/audio/demo.wav
+  loop: true               # file source: start over at the end
+  chunk_ms: 100
+
+transcription:
+  model: auto              # auto = large-v3-turbo on an NVIDIA GPU, small on CPU
+                           # or: tiny | base | small | medium | large-v3 | large-v3-turbo
+  device: auto             # auto | cuda | cpu  (auto falls back to CPU if the GPU fails)
+  compute_type: auto       # auto = float16 on GPU, int8 on CPU
+  language: mixed          # mixed = Arabic or English, detected per utterance
+                           # auto = any language | en | ar
+  mixed_strategy: per_utterance  # how 'mixed' picks the language of an utterance:
+                           # per_utterance = whichever of ar/en is more likely
+                           # arabic_lean   = Arabic unless clearly English (keeps English words in
+                           #                 Latin script inside Arabic sentences; see docs/TESTING.md)
+  english_confidence: 0.9  # arabic_lean: P(en) needed to decode as English
+  initial_prompt: none     # none | auto (code-switched Hejazi/English style hint) | any custom text
+  beam_size: auto          # auto = 5 on GPU, 1 on CPU (faster)
+  vad_threshold: 0.5       # Silero speech probability
+  min_silence_s: 0.6       # pause that ends an utterance
+  max_utterance_s: 15      # force a cut in long monologues
+  partials: auto           # live in-progress text: auto = only on GPU | true | false
+  partial_every_s: 1.0
+  event_grace_s: 20        # max wait for speech still in progress when an event window closes
+  event_tail_s: 4          # finish a sentence that runs past the window end (up to this long)
+
 bus:
-  bind_host: 127.0.0.1     # interface producers bind to (0.0.0.0 inside Docker)
-  eeg_host: 127.0.0.1      # where consumers find the EEG bridge (host.docker.internal from Docker)
+  bind_host: 127.0.0.1     # interface producers bind to
+  eeg_host: 127.0.0.1      # where consumers find the EEG bridge
   eeg_pub_port: 5555       # EEG data + status (PUB)
   eeg_cmd_port: 5556       # commands to the bridge, e.g. simulator injections (PULL)
   events_host: 127.0.0.1   # where consumers find the events service
   events_pub_port: 5560    # events, trigger status, calibration (PUB)
   events_cmd_port: 5561    # manual trigger, calibration, gesture choice (PULL)
+  audio_host: 127.0.0.1
+  audio_pub_port: 5570     # 16 kHz mono audio + mic level (PUB)
+  stt_host: 127.0.0.1
+  stt_pub_port: 5575       # transcript segments, partials, status (PUB)
+  stt_cmd_port: 5576       # language choice (PULL)
 
 ui:
   host: 127.0.0.1

@@ -27,8 +27,13 @@ def _find_root() -> Path:
 ROOT = _find_root()
 CONFIG_DIR = ROOT / "config"
 DATA_DIR = Path(os.environ.get("BAYN_DATA_DIR", ROOT / "data"))
+MODELS_DIR = Path(os.environ.get("BAYN_MODELS_DIR", ROOT / "models"))
 ENV_PREFIX = "BAYN_"
-_META_KEYS = {"BAYN_ROOT", "BAYN_DATA_DIR"}
+_META_KEYS = {"BAYN_ROOT", "BAYN_DATA_DIR", "BAYN_MODELS_DIR", "BAYN_HARDWARE"}
+
+# No telemetry from Hugging Face libraries (models are only downloaded by `bayn models`).
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("DO_NOT_TRACK", "1")
 
 
 # ---------------------------------------------------------------- models
@@ -123,6 +128,32 @@ class EventsConfig(BaseModel):
     calibration: CalibrationConfig = CalibrationConfig()
 
 
+class AudioConfig(BaseModel):
+    source: Literal["mic", "file"] = "mic"
+    device: str | int | None = None
+    file: str = "samples/audio/demo.wav"
+    loop: bool = True
+    chunk_ms: int = 100
+
+
+class TranscriptionConfig(BaseModel):
+    model: str = "auto"
+    device: Literal["auto", "cuda", "cpu"] = "auto"
+    compute_type: str = "auto"
+    language: Literal["mixed", "auto", "en", "ar"] = "mixed"
+    mixed_strategy: Literal["per_utterance", "arabic_lean"] = "per_utterance"
+    english_confidence: float = 0.9
+    initial_prompt: str = "none"
+    beam_size: int | Literal["auto"] = "auto"
+    vad_threshold: float = 0.5
+    min_silence_s: float = 0.6
+    max_utterance_s: float = 15.0
+    partials: bool | Literal["auto"] = "auto"
+    partial_every_s: float = 1.0
+    event_grace_s: float = 20.0
+    event_tail_s: float = 4.0
+
+
 class BusConfig(BaseModel):
     bind_host: str = "127.0.0.1"
     eeg_host: str = "127.0.0.1"
@@ -131,6 +162,11 @@ class BusConfig(BaseModel):
     events_host: str = "127.0.0.1"
     events_pub_port: int = 5560
     events_cmd_port: int = 5561
+    audio_host: str = "127.0.0.1"
+    audio_pub_port: int = 5570
+    stt_host: str = "127.0.0.1"
+    stt_pub_port: int = 5575
+    stt_cmd_port: int = 5576
 
 
 class UIConfig(BaseModel):
@@ -148,6 +184,8 @@ class AppConfig(BaseModel):
     eeg: EEGConfig = EEGConfig()
     simulator: SimulatorConfig = SimulatorConfig()
     events: EventsConfig = EventsConfig()
+    audio: AudioConfig = AudioConfig()
+    transcription: TranscriptionConfig = TranscriptionConfig()
     bus: BusConfig = BusConfig()
     ui: UIConfig = UIConfig()
     logging: LoggingConfig = LoggingConfig()

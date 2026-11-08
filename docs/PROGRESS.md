@@ -11,7 +11,8 @@
    + **ML double-blink detector** (user request after the Phase 3 headset test): the guided onboarding records
    labelled data → features → random forest (double / single blink / movement / other) → `MLDoubleBlinkDetector`;
    two variants compared: EEG only (like a future device) and EEG + Muse accelerometer; rule-based stays as fallback.
-7. Docker Compose + docs polish
+7. Setup & packaging polish (Docker dropped 2026-11-09: Bluetooth, mic and GPU all need native processes):
+   one-command setup incl. Ollama check + model pulls, offline-readiness check, laptop checklist, docs
 8. Full end-to-end test run with simulated and real data
 
 ## Phase 1 — repo, simulated EEG, UI skeleton ✅
@@ -87,4 +88,36 @@ Decisions / gotchas:
 - Events right after start have a short pre-window → flagged `partial` (D10). Demo listens to both gestures (D11).
 - Thresholds on the real headset are untested defaults until the user calibrates; Phase 6 runs the formal protocol.
 
-Next: Phase 4 (Whisper live transcription).
+## Phase 4 — Whisper live transcription ✅
+Built:
+- `audio` process: live microphone (sounddevice; default input or `audio.device`) or WAV file played in real time;
+  16 kHz mono on the bus + 10 Hz mic level + status; reopens the mic if it disappears.
+- `transcriber` process: Silero VAD segmenter (0.6 s pause ends an utterance, 15 s max) → faster-whisper.
+  auto: large-v3-turbo on CUDA (float16, beam 5, live partials) / small on CPU (int8, beam 1); warm-up + CPU fallback;
+  degraded mode if no model (EEG side keeps working). Language `mixed` (ar/en per utterance) | en | ar | auto,
+  switchable live. Hallucination filter. Segments in SQLite (`segments` table), unix timestamps.
+- Event hand-off: on `events.done` the transcript of the window is attached (`transcript.txt/json` in the event folder,
+  event row updated, `transcript.window` published) → input for Phase 5.
+- Dashboard: transcript card (model/device badge, language selector, mic meter + device, segments with time +
+  language tag, RTL Arabic, live partial line, segments inside event windows highlighted), transcript link per event.
+- `bayn models` (download once, offline after), `bayn mics`, `bayn sample-audio` (Windows TTS: English + Arabic
+  "Naayf" → samples/audio/demo.wav + tests/data clips), `--audio file`, `doctor` checks model/CUDA/mic.
+- requirements/stt.txt (pinned top-level), requirements/gpu.txt (CUDA 12 + cuDNN 9 wheels, only with NVIDIA).
+
+Results: GPU large-v3-turbo 0.46 s/utterance, 14/14 ar↔en switches; CPU small 2.4 s/utterance; end to end on GPU text
+appears 1.34 s after speech ends. 93 tests (76 unit, 9 integration, 6 system, 2 hardware).
+
+Decisions / gotchas: Docker dropped. `self.step` shadowed `step()` (D12). PowerShell 5.1 reads .ps1 as ANSI → Arabic in
+a UTF-8 JSON (D13). Audio is never saved as sound, only text.
+
+User live-mic test (2026-11-09, classroom scripts): English 1.2 % WER, Arabic (Hejazi) 28.8 % WER / 12 % CER,
+intra-sentence mixed 39.7 % WER (English-decoded sentences translate the Arabic) → accepted as a **current limitation**
+(TESTING.md F2). Scripts + live transcripts saved as tests/data/scenarios/classroom.json (also Phase 5 summary tests).
+Added: sentence tail for event transcripts (D15), WER/CER metrics, `bayn record`, `bayn eval-stt`, optional
+`mixed_strategy: arabic_lean` and `initial_prompt: auto` (off by default until benchmarked).
+
+**Later (user request):** user writes more realistic classroom scripts (mostly Arabic with English key terms such as
+"pie", "Rutherford", which must not be lost); record them once and benchmark ALL Whisper models × devices × strategies
+on the same audio files (WER, CER, key-term recall, latency) to understand limits and pick defaults per machine.
+
+Next: Phase 5 (Ollama summaries).

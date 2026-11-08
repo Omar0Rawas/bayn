@@ -69,6 +69,40 @@ def _check_bluetooth(seconds: float = 5.0) -> None:
         _add(WARN, "Muse headset", "not seen - turn it on (lights moving), close the phone app, move closer")
 
 
+def _check_speech(cfg) -> None:
+    """Whisper packages + downloaded models + CUDA usability + microphone."""
+    try:
+        importlib.import_module("faster_whisper")
+        from bayn.transcription.engine import CPU_MODEL, GPU_MODEL, add_cuda_dll_dirs, cuda_available, model_dir
+    except ImportError:
+        _add(WARN, "package faster_whisper", "missing - transcription disabled (run setup)")
+        return
+    add_cuda_dll_dirs()
+    gpu = cuda_available()
+    wanted = cfg.transcription.model if cfg.transcription.model != "auto" else (GPU_MODEL if gpu else CPU_MODEL)
+    have = [n for n in (GPU_MODEL, CPU_MODEL, "medium", "base", "tiny") if (model_dir(n) / "model.bin").exists()]
+    _add(OK if wanted in have else FAIL, "Whisper model",
+         f"{wanted} on {'GPU' if gpu else 'CPU'} - " + ("downloaded" if wanted in have else "missing: run `bayn models`")
+         + (f" (also here: {', '.join(n for n in have if n != wanted)})" if len(have) > 1 else ""))
+    if gpu and CPU_MODEL not in have:
+        _add(WARN, "Whisper CPU fallback", f"{CPU_MODEL} not downloaded - no fallback if the GPU fails")
+    if gpu:
+        try:
+            importlib.import_module("nvidia.cudnn")
+            _add(OK, "CUDA libraries", "cuDNN/cuBLAS installed")
+        except ImportError:
+            _add(WARN, "CUDA libraries", "nvidia-cudnn-cu12 missing - Whisper will fall back to CPU (pip install -r requirements/gpu.txt)")
+    if cfg.audio.source == "mic":
+        try:
+            import sounddevice as sd
+
+            dev = sd.query_devices(kind="input")
+            n = len([d for d in sd.query_devices() if d["max_input_channels"] > 0])
+            _add(OK, "Microphone", f"default: {dev['name']} ({n} input devices; `bayn mics` lists them)")
+        except Exception as e:
+            _add(WARN, "Microphone", f"no input device ({e}) - plug one in, or use --audio file")
+
+
 def check() -> int:
     v = sys.version_info
     _add(OK if v >= (3, 12) else FAIL, "Python", f"{platform.python_version()} ({'needs 3.12+' if v < (3, 12) else 'supported'})")
@@ -100,10 +134,10 @@ def check() -> int:
             _add(FAIL if mod == "brainflow" else WARN, f"package {mod}", f"missing ({why}) - run setup")
     if cfg.eeg.source != "sim":
         _check_bluetooth()
+    _check_speech(cfg)
 
     # Later phases - reported now so a new machine can be prepared early.
     _add(INFO if shutil.which("ollama") else WARN, "Ollama", "installed" if shutil.which("ollama") else "not installed (needed from Phase 5: https://ollama.com)")
-    _add(INFO if shutil.which("docker") else WARN, "Docker", "installed" if shutil.which("docker") else "not installed (optional, Phase 7)")
 
     width = max(len(w) for _, w, _ in _results)
     for level, what, detail in _results:

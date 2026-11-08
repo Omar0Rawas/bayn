@@ -24,10 +24,10 @@
 | 1 | Repo, simulated EEG, dashboard skeleton | ✅ done |
 | 2 | Real Muse 2 (BrainFlow, muse-lsl fallback) | ✅ done |
 | 3 | Gesture trigger (jaw clench / double blink), calibration, events | ✅ done (double blink on real headset → ML in Phase 6) |
-| 4 | Live Whisper transcription (English / Arabic / mixed) | ⬜ |
-| 5 | Ollama summaries | ⬜ |
+| 4 | Live Whisper transcription (English / Arabic / mixed) | ✅ done |
+| 5 | Ollama summaries | ⏳ next |
 | 6 | Gesture tuning + guided "blink twice" onboarding + ML blink detector (EEG / EEG + accelerometer) | ⬜ |
-| 7 | Docker Compose + docs polish | ⬜ |
+| 7 | Setup & packaging polish (one-command setup, offline readiness, laptop checklist), docs | ⬜ |
 | 8 | Full end-to-end test run (simulated and real) | ⬜ |
 
 Details per phase: [docs/PROGRESS.md](docs/PROGRESS.md). How everything is tested, with results: [docs/TESTING.md](docs/TESTING.md).
@@ -36,44 +36,51 @@ Details per phase: [docs/PROGRESS.md](docs/PROGRESS.md). How everything is teste
 
 ```mermaid
 flowchart LR
-    subgraph Host["Host (native: Bluetooth + microphone)"]
-        MUSE["Muse 2<br/>TP9 · AF7 · AF8 · TP10<br/>256 Hz BLE"] -->|BrainFlow / muse-lsl| BRIDGE
-        SIM["Simulated EEG<br/>+ injected gestures"] --> BRIDGE
-        BRIDGE["eeg bridge<br/>1–40 Hz + notch<br/>rolling buffer"]
-        MIC["Microphone"] --> AUDIO["audio capture"]
+    subgraph In["Inputs"]
+        MUSE["Muse 2<br/>TP9 · AF7 · AF8 · TP10<br/>256 Hz BLE"]
+        SIM["Simulated EEG<br/>+ injected gestures"]
+        MIC["Microphone<br/>(or WAV file)"]
     end
-    BRIDGE -->|"ZeroMQ eeg.raw / eeg.filt / eeg.status"| EVENTS
-    BRIDGE --> UI
-    subgraph Services["Services (Docker or native)"]
-        EVENTS["events<br/>Detector: clench · double blink<br/>(seizure detector later)"]
-        STT["transcription<br/>faster-whisper"]
-        SUM["summarization<br/>Ollama qwen2.5:3b"]
+    MUSE -->|BrainFlow / muse-lsl| BRIDGE
+    SIM --> BRIDGE
+    MIC --> AUDIO
+    subgraph Bayn["Bayn processes (all local, one ZeroMQ bus)"]
+        BRIDGE["eeg bridge<br/>1–40 Hz + notch · bands<br/>quality · rolling buffer"]
+        EVENTS["events<br/>Detector: clench · double blink · manual<br/>(seizure detector later)<br/>saves EEG −10/+30 s"]
+        AUDIO["audio<br/>16 kHz + mic level"]
+        STT["transcriber<br/>Silero VAD + faster-whisper<br/>ar / en / mixed"]
+        SUM["summarizer<br/>Ollama qwen2.5:3b"]
         UI["dashboard<br/>FastAPI + WebSocket"]
     end
-    AUDIO -->|PCM| STT
-    EVENTS -->|"event + EEG window"| SUM
-    STT -->|timestamped segments| SUM
-    STT --> UI
+    BRIDGE -->|eeg.raw · eeg.filt| EVENTS
+    AUDIO -->|audio.pcm| STT
+    EVENTS -->|"events.done (window saved)"| STT
+    STT -->|"transcript of the event window"| SUM
+    EVENTS -->|EEG stats| SUM
+    BRIDGE --> UI
     EVENTS --> UI
+    STT --> UI
     SUM --> UI
 ```
 
-- **One message bus (ZeroMQ, TCP).** Every component is a separate process, so it works the same natively and in Docker.
+- **One message bus (ZeroMQ, TCP).** Every component is a separate process: a crash in one (e.g. the transcriber) doesn't take down the others. Everything runs natively, because Bluetooth, the microphone and the GPU all live on the host.
 - **The trigger sits behind a `Detector` interface.** The jaw clench, the double blink, the manual button/hotkey and a future seizure model are interchangeable ([seizure_stub.py](src/bayn/events/detectors/seizure_stub.py) shows where a model plugs in).
 - **No hardware assumptions.** The mains notch defaults to `auto` (measures 50 vs 60 Hz). Whisper picks GPU or CPU at startup.
 - **Brainwave view, like the Muse app.** Live delta / theta / alpha / beta / gamma per sensor, e.g. *Alpha (AF7)*. Close your eyes and watch alpha rise on TP9/TP10.
 
 ## Quickstart
 
-Requires **Python 3.12+**. No headset or microphone is needed for the demo.
+Requires **Python 3.12+**. No headset is needed for the demo. A microphone is optional (`--audio file` plays a sample clip instead).
 
 ### Windows (PowerShell)
 ```powershell
-.\bayn setup     # creates .venv, installs pinned deps, runs the machine check
-.\bayn demo      # simulated EEG + scripted gestures, opens http://127.0.0.1:8080
+.\bayn setup     # .venv + pinned deps (+ CUDA libs if NVIDIA GPU), Whisper models, machine check
+.\bayn demo      # simulated EEG + scripted gestures + live mic, opens http://127.0.0.1:8080
 .\bayn check     # with the headset on: 10 s connection + signal-quality test
-.\bayn run       # real Muse 2 (default source) + dashboard
+.\bayn run       # real Muse 2 (default source) + mic + dashboard
+.\bayn demo --audio file    # no microphone: plays samples/audio/demo.wav (English + Arabic)
 ```
+Setup downloads about **2 GB** once on a machine with an NVIDIA GPU (Whisper large-v3-turbo + CUDA libraries + the CPU fallback model), or about **0.5 GB** without one. After that everything runs offline.
 `bayn.cmd` works even though Windows blocks PowerShell scripts by default. It bypasses the policy for that one call only, and nothing on your system changes.
 
 ### macOS / Linux
@@ -89,7 +96,7 @@ pip install -r requirements/dev.txt && pip install -e . --no-deps
 python -m bayn.run --demo
 ```
 
-Other commands: `test`, `doctor` (check a machine before a demo, including a Bluetooth scan), `bridge`, `ui`, `clean`.
+Other commands: `test`, `doctor` (check a machine before a demo: Bluetooth, Muse, Whisper model, GPU, microphone), `models` (download Whisper models), `mics` (list microphones), `sample-audio` (regenerate the demo WAVs), `bridge`, `ui`, `clean`.
 
 ## Firing an event
 
@@ -104,7 +111,31 @@ Pick the gesture in the dashboard's **Event trigger** card (or `events.gesture` 
 Each event:
 - flashes a banner, marks the plot, and beeps (turn sound on with 🔔)
 - saves the EEG from **10 s before to 30 s after** to `data/events/<id>/` as `eeg.csv`, `eeg.npz` and `meta.json` (with before/after brainwave stats). The files are downloadable from the timeline.
-- starts the transcript and summary pipeline (Phases 4–5)
+- gets the **transcript of its window** attached (`transcript.txt` / `.json`, times relative to the event), which feeds the summary (Phase 5)
+
+## Live transcription
+
+Bayn transcribes the microphone **continuously**, so speech from *before* an event is captured too. Every segment is timestamped in the same clock as the EEG.
+
+| | |
+|---|---|
+| **Speech detection** | Silero VAD cuts the stream into utterances (a 0.6 s pause ends one) |
+| **Model** | `auto`: **large-v3-turbo** on an NVIDIA GPU (float16), **small** on CPU (int8). If the GPU fails it falls back to CPU automatically. Override with `transcription.model` |
+| **Languages** | `mixed` (default): each utterance is detected as **Arabic or English**, so you can switch mid-conversation. Also `en`, `ar`, or `auto` (any language). Switch live in the dashboard |
+| **Display** | Arabic shown right-to-left, with language tag and time per segment. Live in-progress text on GPU. Segments inside an event window are highlighted |
+| **Speed (dev PC)** | RTX 2080 Ti: text **~1.3 s after you stop speaking**. CPU (`small`): ~2.4 s per utterance, still keeps up |
+
+**Current limitations** (measured on a live mic, see [TESTING.md](docs/TESTING.md) F2):
+
+| Speech | Word error rate |
+|---|---|
+| English | **1.2 %**, essentially verbatim |
+| Arabic (Hejazi dialect) | **28.8 %** (12 % CER), readable; dialect words are sometimes misspelled |
+| Switching language **inside** a sentence | **≈ 40 %**. When a sentence is decoded as English, its Arabic words can be translated or transliterated |
+
+Switching between sentences works well. A fair benchmark of all Whisper models on recorded classroom audio (with English key terms like "Rutherford" inside Arabic speech) is planned.
+
+Pick a microphone with `BAYN_AUDIO__DEVICE=<part of its name>` (see `.\bayn mics`). With no mic, `--audio file` plays [samples/audio/demo.wav](samples/audio/demo.wav), a fictional English/Arabic narration generated with Windows' offline text-to-speech from [demo_script.json](samples/audio/demo_script.json).
 
 ## Configuration
 
@@ -148,7 +179,8 @@ src/bayn/
                  brainwave bands, bridge, check (headset test)
   events/        Detector interface, clench / double-blink / manual detectors, seizure stub,
                  calibration, event manager (cooldown, EEG windows), SQLite store, service
-  transcription/ faster-whisper live transcription            (Phase 4)
+  transcription/ audio capture (mic / WAV), VAD segmenter, Whisper engine, transcript store,
+                 service (attaches transcripts to events), model downloader
   summarization/ Ollama client + prompts                       (Phase 5)
   ui/            FastAPI server + static dashboard (no CDN, works offline)
   run.py         one-command launcher     doctor.py  machine check
@@ -167,7 +199,7 @@ Tests are grouped into `unit`, `integration`, `system` and `hardware` markers. S
 
 ## Privacy
 
-Everything runs locally. No cloud APIs and no analytics. Model weights are downloaded once during setup (from Phase 4). After that the system runs with the network unplugged.
+Everything runs locally. No cloud APIs and no analytics. Whisper weights are downloaded **once** by `setup` / `bayn models` into `models/` and then loaded from disk only (`local_files_only`). Hugging Face telemetry is disabled. After setup, the system runs with the network unplugged. Audio is never stored as sound, only as transcript text in `data/`.
 
 ## License
 

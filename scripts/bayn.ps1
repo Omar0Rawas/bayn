@@ -48,13 +48,24 @@ switch ($Task) {
     }
     & $Py -m pip install --upgrade pip --quiet
     & $Py -m pip install -r requirements\dev.txt --quiet
+    if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+      Write-Host "NVIDIA GPU found - installing CUDA libraries for Whisper (~1 GB)..."
+      & $Py -m pip install -r requirements\gpu.txt --quiet
+    }
     & $Py -m pip install -e . --no-deps --quiet
     if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+    Write-Host "Downloading Whisper models (one time)..."
+    & $Py -m bayn.transcription.models
     & $Py -m bayn.doctor
   }
   "demo"   { Require-Venv; & $Py -m bayn.run --demo @Rest }
   "run"    { Require-Venv; & $Py -m bayn.run @Rest }
   "check"  { Require-Venv; & $Py -m bayn.eeg.check @Rest }
+  "models" { Require-Venv; & $Py -m bayn.transcription.models @Rest }
+  "mics"   { Require-Venv; & $Py -m bayn.transcription.audio --list-devices }
+  "record" { Require-Venv; & $Py -m bayn.transcription.record @Rest }
+  "eval-stt" { Require-Venv; & $Py -m bayn.transcription.evaluate @Rest }
+  "sample-audio" { Require-Venv; & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "make_sample_audio.ps1") }
   "bridge" { Require-Venv; & $Py -m bayn.eeg.bridge @Rest }
   "ui"     { Require-Venv; & $Py -m bayn.ui.server @Rest }
   "test"   { Require-Venv; & $Py -m pytest @Rest }
@@ -67,10 +78,15 @@ switch ($Task) {
   default {
     Write-Host @"
 Bayn tasks:
-  setup    create .venv, install pinned dependencies, run doctor
-  demo     simulated EEG with scripted gestures + dashboard (no hardware)
-  run      real Muse 2 (default) + dashboard   (run --source lsl | --source sim)
+  setup    create .venv, install pinned deps (+ CUDA libs if NVIDIA GPU), download models, run doctor
+  demo     simulated EEG + scripted gestures + live microphone + dashboard (no headset)
+  run      real Muse 2 (default) + microphone + dashboard
+           options: --source lsl|sim   --audio file (play samples/audio/demo.wav instead of the mic)
   check    connect to the headset for 10 s and report signal quality (check --name Muse-3EE1)
+  models   download Whisper models (models --all: GPU + CPU models, e.g. to copy to a laptop)
+  mics     list microphones          sample-audio  regenerate the demo/test WAVs (Windows TTS)
+  record   record the mic to data/recordings/<name>.wav   (record classroom_mixed --seconds 45)
+  eval-stt score transcription strategies on a recording  (eval-stt --scenario mixed)
   bridge   EEG bridge only           ui   dashboard only
   test     run the test suite        doctor  check this machine
   clean    remove caches

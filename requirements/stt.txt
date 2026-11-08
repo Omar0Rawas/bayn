@@ -1,0 +1,9 @@
+# Speech-to-text (Phase 4): faster-whisper + microphone capture.
+# Top-level pins; pip resolves the rest (some parts differ per OS).
+faster-whisper==1.2.1
+ctranslate2==4.8.5
+onnxruntime==1.31.1
+av==19.0.2
+tokenizers==0.23.3
+huggingface_hub==2.4.0
+sounddevice==0.5.6      # Linux also needs the system package: libportaudio2

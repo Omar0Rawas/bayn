@@ -15,10 +15,11 @@ dist/
 config/local.yaml
 
 # Runtime data (events, EEG windows, calibration profiles, transcripts) and model caches
-data/
-models/
+/data/
+/models/
 *.wav
 !samples/audio/*.wav
+!tests/data/*.wav
 
 # Claude session exports contain full chat history - never commit
 claude-session*.zip

@@ -39,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Run the Bayn pipeline")
     ap.add_argument("--demo", action="store_true", help="simulated EEG with scripted gestures")
     ap.add_argument("--source", choices=["sim", "muse", "lsl"], help="EEG source (default from config)")
+    ap.add_argument("--audio", choices=["mic", "file"], help="mic (default) or file (samples/audio/demo.wav)")
     ap.add_argument("--no-browser", action="store_true", help="do not open the dashboard")
     args = ap.parse_args(argv)
 
@@ -49,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
         env.setdefault("BAYN_EVENTS__GESTURE", "both")     # scripted gestures alternate clench / double blink
     if args.source:
         env["BAYN_EEG__SOURCE"] = args.source
+    if args.audio:
+        env["BAYN_AUDIO__SOURCE"] = args.audio
     os.environ.update(env)
     cfg = load_config()
 
@@ -59,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
         "eeg-bridge": ([py, "-m", "bayn.eeg.bridge"], False),
         "events": ([py, "-m", "bayn.events.service"], False),
         "dashboard": ([py, "-m", "bayn.ui.server"], False),
+        # speech side: restarted if it ever dies, so it can't take EEG/triggering down with it
+        "audio": ([py, "-m", "bayn.transcription.audio"], True),
+        "transcriber": ([py, "-m", "bayn.transcription.service"], True),
     }
     if cfg.eeg.source == "lsl" and cfg.eeg.lsl.autostart_muselsl:
         cmd = [py, "-m", "muselsl", "stream"]

@@ -28,11 +28,14 @@ from bayn import __version__
 from bayn.common.bus import CommandSender, ThreadedSubscriber
 from bayn.common.config import AppConfig, load_config
 from bayn.common.log import setup_logging
-from bayn.common.schemas import (GESTURES, TOPIC_CALIBRATION, TOPIC_EEG_BANDS, TOPIC_EEG_FILT,
-                                 TOPIC_EEG_INJECTED, TOPIC_EEG_STATUS, TOPIC_EVENT, TOPIC_EVENT_DONE,
-                                 TOPIC_EVENTS_STATUS)
+from bayn.common.schemas import (GESTURES, TOPIC_AUDIO_LEVEL, TOPIC_AUDIO_STATUS, TOPIC_CALIBRATION,
+                                 TOPIC_EEG_BANDS, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED, TOPIC_EEG_STATUS, TOPIC_EVENT,
+                                 TOPIC_EVENT_DONE, TOPIC_EVENTS_STATUS, TOPIC_TRANSCRIPT, TOPIC_TRANSCRIPT_PARTIAL,
+                                 TOPIC_TRANSCRIPT_STATUS, TOPIC_TRANSCRIPT_WINDOW)
 from bayn.events.detectors import GESTURE_CHOICES
-from bayn.events.store import FILES, EventStore
+from bayn.events.store import DOWNLOADABLE, EventStore
+from bayn.transcription.service import LANGUAGES
+from bayn.transcription.store import TranscriptStore
 
 log = logging.getLogger("bayn.ui")
 STATIC = Path(__file__).parent / "static"
@@ -47,6 +50,7 @@ class Hub:
         self.last_status: dict | None = None
         self.last_events_status: dict | None = None
         self.last_calibration: dict | None = None
+        self.last_by_type: dict[str, dict] = {}      # latest status messages, replayed on connect
 
     async def broadcast(self, msg: dict) -> None:
         dead = []
@@ -108,6 +112,20 @@ async def _relay_events(cfg: AppConfig, hub: Hub) -> None:
         sub.close()
 
 
+async def _relay(host: str, port: int, kinds: dict[str, str], hub: Hub, keep: set[str] = frozenset()) -> None:
+    """Generic relay: topic -> {"type": kinds[topic], **payload}; topics in `keep` are replayed to new clients."""
+    sub = ThreadedSubscriber(host, port, list(kinds), asyncio.get_running_loop())
+    try:
+        while True:
+            topic, m = await sub.queue.get()
+            msg = {"type": kinds[topic], **m}
+            if topic in keep:
+                hub.last_by_type[kinds[topic]] = msg
+            await hub.broadcast(msg)
+    finally:
+        sub.close()
+
+
 async def _heartbeat(hub: Hub) -> None:
     """Lets the UI show 'no signal' when the bridge is down."""
     while True:
@@ -137,17 +155,29 @@ class GestureRequest(BaseModel):
     gesture: str
 
 
+class LanguageRequest(BaseModel):
+    language: str
+
+
 def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) -> FastAPI:
     cfg = cfg or load_config()
     hub = Hub()
     state: dict[str, Any] = {}
+    b = cfg.bus
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        state["eeg_cmd"] = CommandSender(cfg.bus.eeg_host, cfg.bus.eeg_cmd_port)
-        state["events_cmd"] = CommandSender(cfg.bus.events_host, cfg.bus.events_cmd_port)
+        state["eeg_cmd"] = CommandSender(b.eeg_host, b.eeg_cmd_port)
+        state["events_cmd"] = CommandSender(b.events_host, b.events_cmd_port)
+        state["stt_cmd"] = CommandSender(b.stt_host, b.stt_cmd_port)
         state["store"] = store or EventStore()
+        state["transcripts"] = TranscriptStore(state["store"].root)
+        audio_kinds = {TOPIC_AUDIO_LEVEL: "audio_level", TOPIC_AUDIO_STATUS: "audio_status"}
+        stt_kinds = {TOPIC_TRANSCRIPT: "transcript", TOPIC_TRANSCRIPT_PARTIAL: "transcript_partial",
+                     TOPIC_TRANSCRIPT_STATUS: "transcript_status", TOPIC_TRANSCRIPT_WINDOW: "transcript_window"}
         tasks = [asyncio.create_task(_relay_eeg(cfg, hub)), asyncio.create_task(_relay_events(cfg, hub)),
+                 asyncio.create_task(_relay(b.audio_host, b.audio_pub_port, audio_kinds, hub, {TOPIC_AUDIO_STATUS})),
+                 asyncio.create_task(_relay(b.stt_host, b.stt_pub_port, stt_kinds, hub, {TOPIC_TRANSCRIPT_STATUS})),
                  asyncio.create_task(_heartbeat(hub))]
         for t in tasks:
             t.add_done_callback(_log_task_crash)
@@ -157,8 +187,8 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
             t.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await t
-        state["eeg_cmd"].close()
-        state["events_cmd"].close()
+        for k in ("eeg_cmd", "events_cmd", "stt_cmd"):
+            state[k].close()
 
     app = FastAPI(title="Bayn", version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
@@ -168,7 +198,8 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
         return {"type": "hello", "version": __version__, "source": cfg.eeg.source,
                 "channels": cfg.eeg.channels, "fs": cfg.eeg.fs, "plot_seconds": cfg.ui.plot_seconds,
                 "notch": cfg.eeg.notch_hz, "bandpass": list(cfg.eeg.bandpass_hz), "gestures": list(GESTURES),
-                "trigger_gestures": list(GESTURE_CHOICES), "pre_s": cfg.events.pre_s, "post_s": cfg.events.post_s}
+                "trigger_gestures": list(GESTURE_CHOICES), "pre_s": cfg.events.pre_s, "post_s": cfg.events.post_s,
+                "languages": list(LANGUAGES), "audio_source": cfg.audio.source}
 
     def _send_events(payload: dict) -> None:
         if not state["events_cmd"].send(payload):
@@ -216,13 +247,25 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
         _send_events({"cmd": "set_gesture", "gesture": req.gesture})
         return {"queued": req.gesture}
 
+    @app.post("/api/transcription/language", status_code=202)
+    async def language(req: LanguageRequest) -> dict:
+        if req.language not in LANGUAGES:
+            raise HTTPException(400, f"language must be one of {LANGUAGES}")
+        if not state["stt_cmd"].send({"cmd": "set_language", "language": req.language}):
+            raise HTTPException(503, "transcription service not reachable")
+        return {"queued": req.language}
+
+    @app.get("/api/transcript")
+    async def transcript(limit: int = 50) -> list[dict]:
+        return state["transcripts"].recent(min(max(limit, 1), 500))
+
     @app.get("/api/events")
     async def list_events(limit: int = 50) -> list[dict]:
         return state["store"].list(min(max(limit, 1), 500))
 
     @app.get("/api/events/{event_id}/{name}")
     async def event_file(event_id: str, name: str) -> FileResponse:
-        if name not in FILES:
+        if name not in DOWNLOADABLE:
             raise HTTPException(404)
         try:
             path = state["store"].dir_for(event_id) / name
@@ -238,10 +281,11 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
         await ws.accept()
         hub.clients.add(ws)
         await ws.send_json(_hello())
-        for last in (hub.last_status, hub.last_events_status):
+        for last in (hub.last_status, hub.last_events_status, *hub.last_by_type.values()):
             if last:
                 await ws.send_json(last)
         await ws.send_json({"type": "event_history", "events": state["store"].list(30)})
+        await ws.send_json({"type": "transcript_history", "segments": state["transcripts"].recent(40)})
         try:
             while True:
                 await ws.receive_text()   # client messages unused; keeps socket open

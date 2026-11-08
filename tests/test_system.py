@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -35,12 +36,20 @@ def _wait_http(url: str, timeout: float = 30.0) -> None:
     raise TimeoutError(url)
 
 
+TINY_READY = (Path(__file__).parents[1] / "models" / "whisper" / "tiny" / "model.bin").exists()
+
+
 @pytest.fixture
 def running_stack(tmp_path):
-    ui, pub, cmd, epub, ecmd = (_free_port() for _ in range(5))
+    ui, pub, cmd, epub, ecmd, apub, spub, scmd = (_free_port() for _ in range(8))
     env = dict(os.environ, BAYN_EEG__SOURCE="sim", BAYN_UI__PORT=str(ui),
                BAYN_BUS__EEG_PUB_PORT=str(pub), BAYN_BUS__EEG_CMD_PORT=str(cmd),
                BAYN_BUS__EVENTS_PUB_PORT=str(epub), BAYN_BUS__EVENTS_CMD_PORT=str(ecmd),
+               BAYN_BUS__AUDIO_PUB_PORT=str(apub), BAYN_BUS__STT_PUB_PORT=str(spub), BAYN_BUS__STT_CMD_PORT=str(scmd),
+               # speech: the English test clip, looping, stands in for the microphone; tiny model on CPU
+               BAYN_AUDIO__SOURCE="file", BAYN_AUDIO__FILE=str(Path(__file__).parent / "data" / "en_short.wav"),
+               BAYN_TRANSCRIPTION__MODEL="tiny", BAYN_TRANSCRIPTION__DEVICE="cpu",
+               BAYN_TRANSCRIPTION__EVENT_GRACE_S="6",
                BAYN_SIMULATOR__SEED="5", BAYN_SIMULATOR__MAINS_HZ="60",
                BAYN_SIMULATOR__NATURAL_BLINKS="false", BAYN_SIMULATOR__NATURAL_EMG="false",
                BAYN_SIMULATOR__AUTO_GESTURES__ENABLED="false", BAYN_LOGGING__LEVEL="WARNING",
@@ -50,8 +59,10 @@ def running_stack(tmp_path):
                BAYN_EVENTS__CALIBRATION__READY_S="1", BAYN_EVENTS__CALIBRATION__DO_S="3",
                BAYN_EVENTS__CALIBRATION__RELEASE_S="1.5",
                BAYN_DATA_DIR=str(tmp_path))
-    procs = [subprocess.Popen([sys.executable, "-m", m], env=env)
-             for m in ("bayn.eeg.bridge", "bayn.events.service", "bayn.ui.server")]
+    modules = ["bayn.eeg.bridge", "bayn.events.service", "bayn.ui.server"]
+    if TINY_READY:
+        modules += ["bayn.transcription.audio", "bayn.transcription.service"]
+    procs = [subprocess.Popen([sys.executable, "-m", m], env=env) for m in modules]
     try:
         _wait_http(f"http://127.0.0.1:{ui}/api/health")
         yield ui
@@ -190,6 +201,38 @@ def test_guided_calibration_with_simulator(running_stack):
     final = cal[-1]
     assert final["state"] == "done", final
     assert final["results"]["clench"]["quality"] == "good"
+
+
+@pytest.mark.skipif(not TINY_READY, reason="run `bayn models` (needs tiny)")
+def test_live_transcript_and_event_transcript(running_stack):
+    """Audio -> VAD -> Whisper -> browser; a manual event gets the transcript of its window attached."""
+    ui = running_stack
+    state = {}
+
+    def actions(m):
+        if m["type"] == "transcript" and "seg" not in state:
+            state["seg"] = m                                 # speech is flowing: fire an event now
+            assert _post(ui, "/api/events/trigger", {"source": "button"}) == 202
+        if m["type"] == "event":
+            state["event_id"] = m["id"]
+
+    def until(ms):
+        return any(m["type"] == "transcript_window" and m["event_id"] == state.get("event_id") for m in ms)
+
+    msgs = asyncio.run(_collect(ui, until, 90, actions))
+    seg = state["seg"]
+    assert seg["lang"] == "en" and "time" in seg["text"].lower()
+    assert seg["t_end"] > seg["t_start"] > time.time() - 60          # unix timestamps
+    assert seg["latency_s"] < 5
+    status = [m for m in msgs if m["type"] == "transcript_status"][-1]
+    assert status["model"] == "tiny" and status["device"] == "cpu" and status["audio_ok"]
+    win = [m for m in msgs if m["type"] == "transcript_window"][-1]
+    assert win["n_segments"] >= 1 and "(en)" in win["text"]
+    txt = urllib.request.urlopen(f"http://127.0.0.1:{ui}/api/events/{win['event_id']}/transcript.txt").read()
+    assert b"(en)" in txt
+    ev = [e for e in json.loads(urllib.request.urlopen(f"http://127.0.0.1:{ui}/api/events").read())
+          if e["id"] == win["event_id"]][0]
+    assert ev["transcript"]["n_segments"] == win["n_segments"] and ev["state"] == "saved"
 
 
 def test_bad_gesture_rejected(running_stack):
