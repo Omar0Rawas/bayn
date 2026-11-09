@@ -30,7 +30,8 @@ from bayn.common.config import AppConfig, load_config
 from bayn.common.log import setup_logging
 from bayn.common.schemas import (GESTURES, TOPIC_AUDIO_LEVEL, TOPIC_AUDIO_STATUS, TOPIC_CALIBRATION,
                                  TOPIC_EEG_BANDS, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED, TOPIC_EEG_STATUS, TOPIC_EVENT,
-                                 TOPIC_EVENT_DONE, TOPIC_EVENTS_STATUS, TOPIC_TRANSCRIPT, TOPIC_TRANSCRIPT_PARTIAL,
+                                 TOPIC_EVENT_DONE, TOPIC_EVENTS_STATUS, TOPIC_SUMMARY, TOPIC_SUMMARY_STATUS,
+                                 TOPIC_SUMMARY_TOKEN, TOPIC_TRANSCRIPT, TOPIC_TRANSCRIPT_PARTIAL,
                                  TOPIC_TRANSCRIPT_STATUS, TOPIC_TRANSCRIPT_WINDOW)
 from bayn.events.detectors import GESTURE_CHOICES
 from bayn.events.store import DOWNLOADABLE, EventStore
@@ -159,6 +160,11 @@ class LanguageRequest(BaseModel):
     language: str
 
 
+class RegenerateRequest(BaseModel):
+    event_id: str
+    lang: str | None = None          # en | ar | None (= configured language)
+
+
 def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) -> FastAPI:
     cfg = cfg or load_config()
     hub = Hub()
@@ -170,6 +176,7 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
         state["eeg_cmd"] = CommandSender(b.eeg_host, b.eeg_cmd_port)
         state["events_cmd"] = CommandSender(b.events_host, b.events_cmd_port)
         state["stt_cmd"] = CommandSender(b.stt_host, b.stt_cmd_port)
+        state["sum_cmd"] = CommandSender(b.sum_host, b.sum_cmd_port)
         state["store"] = store or EventStore()
         state["transcripts"] = TranscriptStore(state["store"].root)
         audio_kinds = {TOPIC_AUDIO_LEVEL: "audio_level", TOPIC_AUDIO_STATUS: "audio_status"}
@@ -178,6 +185,9 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
         tasks = [asyncio.create_task(_relay_eeg(cfg, hub)), asyncio.create_task(_relay_events(cfg, hub)),
                  asyncio.create_task(_relay(b.audio_host, b.audio_pub_port, audio_kinds, hub, {TOPIC_AUDIO_STATUS})),
                  asyncio.create_task(_relay(b.stt_host, b.stt_pub_port, stt_kinds, hub, {TOPIC_TRANSCRIPT_STATUS})),
+                 asyncio.create_task(_relay(b.sum_host, b.sum_pub_port,
+                                            {TOPIC_SUMMARY_TOKEN: "summary_token", TOPIC_SUMMARY: "summary",
+                                             TOPIC_SUMMARY_STATUS: "summary_status"}, hub, {TOPIC_SUMMARY_STATUS})),
                  asyncio.create_task(_heartbeat(hub))]
         for t in tasks:
             t.add_done_callback(_log_task_crash)
@@ -187,7 +197,7 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
             t.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await t
-        for k in ("eeg_cmd", "events_cmd", "stt_cmd"):
+        for k in ("eeg_cmd", "events_cmd", "stt_cmd", "sum_cmd"):
             state[k].close()
 
     app = FastAPI(title="Bayn", version=__version__, lifespan=lifespan,
@@ -253,6 +263,24 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
             raise HTTPException(400, f"language must be one of {LANGUAGES}")
         if not state["stt_cmd"].send({"cmd": "set_language", "language": req.language}):
             raise HTTPException(503, "transcription service not reachable")
+        return {"queued": req.language}
+
+    @app.post("/api/summary/regenerate", status_code=202)
+    async def regenerate(req: RegenerateRequest) -> dict:
+        try:
+            state["store"].dir_for(req.event_id)
+        except ValueError:
+            raise HTTPException(400, "bad event id") from None
+        if not state["sum_cmd"].send({"cmd": "regenerate", "event_id": req.event_id, "lang": req.lang}):
+            raise HTTPException(503, "summarizer not reachable")
+        return {"queued": req.event_id}
+
+    @app.post("/api/summary/language", status_code=202)
+    async def summary_language(req: LanguageRequest) -> dict:
+        if req.language not in ("auto", "en", "ar", "both"):
+            raise HTTPException(400, "language must be auto, en, ar or both")
+        if not state["sum_cmd"].send({"cmd": "set_language", "language": req.language}):
+            raise HTTPException(503, "summarizer not reachable")
         return {"queued": req.language}
 
     @app.get("/api/transcript")

@@ -1,0 +1,100 @@
+{
+  "_about": "Bayn recording corpus. 4 topics x 3 versions (English, Arabic, mixed = Arabic with English key terms). The same content in every version, so languages can be compared fairly. Source of truth for docs/CORPUS.md (python -m bayn.corpus render), bayn record <id>, bayn eval-stt --corpus <id|all>, and the summary checks. Names are fictional.",
+  "recording_tips": [
+    "Record each script once with `.\\bayn record <id>` - the script opens in your browser in large type, one sentence per line (put it next to the terminal). Press Enter in the terminal to start, and again when you finish reading.",
+    "Same microphone, same distance (about 20-30 cm), quiet room, for every recording, so models are compared on equal terms.",
+    "Read naturally, like you would in class: normal speed, small pauses at commas and full stops. Don't over-articulate.",
+    "If you stumble, just continue (that's realistic) - or press Ctrl+C and record it again.",
+    "Recordings are saved in data/recordings/ and never leave this computer (not committed to git)."
+  ],
+  "topics": {
+    "atom": {
+      "title": "The atom and Rutherford's experiment (science lesson)",
+      "facts": [
+        {"name": "Rutherford's gold foil experiment", "en": [["rutherford"], ["gold"]], "ar": [["رذرفورد", "rutherford"], ["ذهب", "gold"]]},
+        {"name": "a few particles bounced back", "en": [["bounc", "deflect", "came back", "back"]], "ar": [["ارتد", "ارتداد", "bounc", "رجع", "انعكس"]]},
+        {"name": "the mass is in a tiny nucleus", "en": [["nucleus"]], "ar": [["نواه", "nucleus"]]},
+        {"name": "electrons move around the nucleus", "en": [["electron"]], "ar": [["الكترون", "electron"]]},
+        {"name": "question: why can't we walk through walls", "en": [["wall"]], "ar": [["جدار", "حائط", "wall"]]}
+      ],
+      "forbidden": {"en": ["seizure", "epilep", "diagnos"], "ar": ["نوبه", "صرع", "تشخيص"]}
+    },
+    "pi": {
+      "title": "Circles and pi (maths lesson)",
+      "facts": [
+        {"name": "circumference = distance around the circle", "en": [["circumference"]], "ar": [["محيط", "circumference"]]},
+        {"name": "diameter = distance across through the centre", "en": [["diameter"]], "ar": [["قطر", "diameter"]]},
+        {"name": "the ratio is about 3.14", "en": [["3.14", "3 14", "three point one four"]], "ar": [["3.14", "3 14", "ثلاثه فاصله", "three point one four"]]},
+        {"name": "the number is called pi", "en": [["pi", "π"]], "ar": [["ط", "باي", "pi", "π"]]},
+        {"name": "homework: test three round objects at home", "en": [["homework"], ["round", "circular", "circle"]], "ar": [["واجب"], ["دائري", "دائريه", "دائره"]]}
+      ],
+      "forbidden": {"en": ["seizure", "epilep", "diagnos"], "ar": ["نوبه", "صرع", "تشخيص"]}
+    },
+    "plants": {
+      "title": "Photosynthesis (biology lesson)",
+      "facts": [
+        {"name": "plants make food by photosynthesis", "en": [["photosynthesis"]], "ar": [["البناء الضوئي", "التمثيل الضوئي", "photosynthesis"]]},
+        {"name": "leaves take in carbon dioxide", "en": [["carbon dioxide", "co2"]], "ar": [["ثاني اكسيد الكربون", "carbon dioxide", "co2"]]},
+        {"name": "chlorophyll captures sunlight", "en": [["chlorophyll"]], "ar": [["كلوروفيل", "يخضور", "chlorophyll"]]},
+        {"name": "oxygen is released", "en": [["oxygen"]], "ar": [["اكسجين", "الاكسجين", "oxygen"]]},
+        {"name": "question: a plant kept in the dark for a week", "en": [["dark"]], "ar": [["مظلم", "ظلام", "الظلام", "dark"]]}
+      ],
+      "forbidden": {"en": ["seizure", "epilep", "diagnos"], "ar": ["نوبه", "صرع", "تشخيص"]}
+    },
+    "incident": {
+      "title": "A student becomes unresponsive in class (the event Bayn is built for)",
+      "facts": [
+        {"name": "time: 10:20", "en": [["10:20", "10 20", "ten twenty", "10.20"]], "ar": [["10:20", "10 20", "عشره وعشرين", "العاشره والثلث", "10.20"]]},
+        {"name": "staring, not responding to her name", "en": [["star", "not respond", "unresponsive", "didn't respond", "no response"]], "ar": [["تحدق", "تحديق", "ما ترد", "لا ترد", "لم ترد", "لا تستجيب", "لم تستجب"]]},
+        {"name": "lip / chewing movements", "en": [["chew", "lip"]], "ar": [["تمضغ", "مضغ", "شفايف", "شفتي", "شفاه"]]},
+        {"name": "lasted about forty seconds", "en": [["40", "forty"]], "ar": [["اربعين", "40", "forty"]]},
+        {"name": "did not fall, stayed seated", "en": [["fall", "fell", "seated", "sitting"]], "ar": [["طاحت", "تسقط", "سقوط", "تقع", "جالسه", "جالس"]]},
+        {"name": "afterwards tired, doesn't remember", "en": [["remember", "recall"]], "ar": [["تتذكر", "تذكر", "remember"]]},
+        {"name": "the school nurse was called", "en": [["nurse"]], "ar": [["ممرض", "nurse"]]}
+      ],
+      "forbidden": {"_about": "observational narration: a summary must not diagnose or exaggerate",
+                    "en": ["seizure", "epilep", "diagnos", "fainted", "unconscious", "she fell", "ambulance"],
+                    "ar": ["نوبه", "صرع", "تشخيص", "اغماء", "فقدت الوعي", "سقطت", "اسعاف"]}
+    }
+  },
+  "scripts": [
+    {"id": "en-atom", "language": "en", "topic": "atom",
+     "text": "Good morning, everyone. Today we're talking about the atom. About a hundred years ago, a scientist named Ernest Rutherford fired tiny particles at a very thin sheet of gold foil. Most of the particles went straight through, but a few of them bounced back. Rutherford concluded that almost all of the atom's mass is packed into a tiny centre called the nucleus. The nucleus contains protons, which have a positive charge, and the electrons move around it. So, here's a question for you: if most of the atom is empty space, why can't we walk through walls?",
+     "key_terms": ["Rutherford", "gold foil", "nucleus", "protons", "electrons", "atom"]},
+    {"id": "en-pi", "language": "en", "topic": "pi",
+     "text": "Alright, take out your rulers. Measure the distance around this circle. That's the circumference. Now measure straight across, through the middle. That's the diameter. If you divide the circumference by the diameter, you always get the same number, about three point one four. We call this number pi. It doesn't matter if the circle is as small as a coin or as big as a wheel. So the formula is: the circumference equals pi times the diameter. For homework, find three round objects at home and test it yourself.",
+     "key_terms": ["circumference", "diameter", "pi", "three point one four", "formula"]},
+    {"id": "en-plants", "language": "en", "topic": "plants",
+     "text": "Look at the plant on the windowsill. Plants make their own food through a process called photosynthesis. The leaves take in carbon dioxide from the air, and the roots take in water from the soil. A green substance in the leaves, called chlorophyll, captures energy from sunlight. Using that energy, the plant turns water and carbon dioxide into sugar, and it releases oxygen. That oxygen is what we breathe. Quick question: what do you think happens to a plant if we keep it in a dark cupboard for a week?",
+     "key_terms": ["photosynthesis", "carbon dioxide", "chlorophyll", "oxygen", "sugar"]},
+    {"id": "en-incident", "language": "en", "topic": "incident",
+     "text": "It's ten twenty. Sara stopped answering in the middle of the reading. She's staring at the board and she's not responding to her name. Her lips are moving, like small chewing movements, and her left hand is fidgeting with her pencil. I'm timing it now. About forty seconds have passed. She didn't fall, she's still sitting in her chair. Okay, she's blinking now and looking around. She says she feels tired and she doesn't remember the last minute. Ahmed, please go and call the school nurse.",
+     "key_terms": ["ten twenty", "Sara", "staring", "chewing", "forty seconds", "nurse"]},
+
+    {"id": "ar-atom", "language": "ar", "topic": "atom",
+     "text": "صباح الخير يا شباب. اليوم بنتكلم عن الذرة. قبل حوالي مئة سنة، قام عالم اسمه إرنست رذرفورد بإطلاق جسيمات صغيرة جداً على صفيحة رقيقة من الذهب. معظم الجسيمات عبرت الصفيحة مباشرة، لكن بعضها ارتد للخلف. واستنتج رذرفورد أن معظم كتلة الذرة موجودة في مركز صغير جداً اسمه النواة. النواة فيها بروتونات شحنتها موجبة، والإلكترونات تتحرك حولها. طيب، سؤال لكم: إذا كان أغلب الذرة فراغ، ليش ما نقدر نمشي من خلال الجدار؟",
+     "key_terms": ["رذرفورد", "الذهب", "النواة", "بروتونات", "الإلكترونات", "الذرة"]},
+    {"id": "ar-pi", "language": "ar", "topic": "pi",
+     "text": "طيب، طلّعوا المساطر. قيسوا المسافة حول هذه الدائرة، وهذا اسمه المحيط. الحين قيسوا المسافة من طرف لطرف مروراً بالمركز، وهذا اسمه القطر. إذا قسمنا المحيط على القطر نحصل دائماً على نفس العدد، تقريباً ثلاثة فاصلة واحد أربعة. نسمي هذا العدد ط. ما يفرق إذا كانت الدائرة صغيرة مثل العملة أو كبيرة مثل العجلة. إذن القانون: المحيط يساوي ط ضرب القطر. والواجب: دوروا على ثلاث أشياء دائرية في البيت وجربوا بأنفسكم.",
+     "key_terms": ["المحيط", "القطر", "ط", "ثلاثة فاصلة واحد أربعة", "القانون"]},
+    {"id": "ar-plants", "language": "ar", "topic": "plants",
+     "text": "شوفوا النبتة اللي على الشباك. النباتات تصنع غذاءها بنفسها من خلال عملية اسمها البناء الضوئي. الأوراق تمتص ثاني أكسيد الكربون من الهواء، والجذور تمتص الماء من التربة. فيه مادة خضراء في الأوراق اسمها الكلوروفيل، تلتقط الطاقة من ضوء الشمس. وباستخدام هذه الطاقة يحوّل النبات الماء وثاني أكسيد الكربون إلى سكر، ويطلق الأكسجين. وهذا الأكسجين هو اللي نتنفسه. سؤال سريع: إيش تتوقعون يصير للنبتة لو حطيناها في دولاب مظلم لمدة أسبوع؟",
+     "key_terms": ["البناء الضوئي", "ثاني أكسيد الكربون", "الكلوروفيل", "الأكسجين", "سكر"]},
+    {"id": "ar-incident", "language": "ar", "topic": "incident",
+     "text": "الساعة الآن عشرة وعشرين. سارة توقفت عن الرد في نص القراءة. هي تحدّق في السبورة وما ترد لما أناديها باسمها. شفايفها تتحرك حركات صغيرة كأنها تمضغ، ويدها اليسرى تعبث بالقلم. أنا أحسب الوقت الآن. مرت تقريباً أربعين ثانية. ما طاحت، وهي لسا جالسة على الكرسي. طيب، الحين صارت ترمش وتطالع حولها. تقول إنها تعبانة وما تتذكر آخر دقيقة. أحمد، لو سمحت روح نادِ ممرضة المدرسة.",
+     "key_terms": ["عشرة وعشرين", "سارة", "تحدّق", "تمضغ", "أربعين ثانية", "ممرضة"]},
+
+    {"id": "mx-atom", "language": "mixed", "topic": "atom",
+     "text": "صباح الخير يا شباب. اليوم درسنا عن الـ atom. قبل حوالي مئة سنة، العالم Rutherford أطلق جسيمات صغيرة على صفيحة رقيقة من الـ gold foil. معظم الجسيمات عبرت مباشرة، بس بعضها ارتد. فاستنتج Rutherford إن أغلب كتلة الذرة موجودة في مركز صغير اسمه الـ nucleus. الـ nucleus فيه protons شحنتها موجبة، والـ electrons تتحرك حوله. طيب، سؤال: إذا أغلب الذرة فراغ، ليش ما نقدر نمشي من خلال الجدار؟",
+     "key_terms": ["atom", "Rutherford", "gold foil", "nucleus", "protons", "electrons"]},
+    {"id": "mx-pi", "language": "mixed", "topic": "pi",
+     "text": "طيب، طلّعوا المساطر. قيسوا المسافة حول الدائرة، وهذا اسمه الـ circumference. وبعدين قيسوا من طرف لطرف عبر المركز، وهذا الـ diameter. إذا قسمنا الـ circumference على الـ diameter نطلع دائماً بنفس الرقم، تقريباً three point one four، ونسميه pi. ما يفرق إذا الدائرة صغيرة أو كبيرة. إذن الـ formula: الـ circumference يساوي pi ضرب الـ diameter. والواجب: جربوها على ثلاث أشياء دائرية في البيت.",
+     "key_terms": ["circumference", "diameter", "three point one four", "pi", "formula"]},
+    {"id": "mx-plants", "language": "mixed", "topic": "plants",
+     "text": "شوفوا النبتة اللي على الشباك. النبات يصنع غذاءه بعملية اسمها photosynthesis. الأوراق تمتص الـ carbon dioxide من الهواء، والجذور تمتص الماء. فيه مادة خضراء اسمها chlorophyll تلتقط طاقة الشمس. وبهذي الطاقة يحول الماء والـ carbon dioxide إلى sugar ويطلق الـ oxygen، وهو اللي نتنفسه. سؤال سريع: إيش يصير للنبتة لو حطيناها في دولاب مظلم أسبوع كامل؟",
+     "key_terms": ["photosynthesis", "carbon dioxide", "chlorophyll", "sugar", "oxygen"]},
+    {"id": "mx-incident", "language": "mixed", "topic": "incident",
+     "text": "الساعة الحين عشرة وعشرين. سارة وقفت عن الرد في نص الـ reading. تحدق في الـ board وما ترد لما أناديها. شفايفها تتحرك كأنها تمضغ، ويدها اليسرى تلعب بالقلم. أنا أحسب الوقت الآن، تقريباً forty seconds. ما طاحت، لسا جالسة على الكرسي. طيب، الحين ترمش وتطالع حولها، وتقول إنها tired وما تتذكر آخر دقيقة. أحمد، روح نادِ الـ school nurse لو سمحت.",
+     "key_terms": ["reading", "board", "forty seconds", "tired", "school nurse"]}
+  ]
+}

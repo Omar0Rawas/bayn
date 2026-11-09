@@ -25,7 +25,7 @@
 | 2 | Real Muse 2 (BrainFlow, muse-lsl fallback) | ✅ done |
 | 3 | Gesture trigger (jaw clench / double blink), calibration, events | ✅ done (double blink on real headset → ML in Phase 6) |
 | 4 | Live Whisper transcription (English / Arabic / mixed) | ✅ done |
-| 5 | Ollama summaries | ⏳ next |
+| 5 | Local LLM summaries (Ollama), shown live: heard → context → summary | ✅ done |
 | 6 | Gesture tuning + guided "blink twice" onboarding + ML blink detector (EEG / EEG + accelerometer) | ⬜ |
 | 7 | Setup & packaging polish (one-command setup, offline readiness, laptop checklist), docs | ⬜ |
 | 8 | Full end-to-end test run (simulated and real) | ⬜ |
@@ -49,7 +49,7 @@ flowchart LR
         EVENTS["events<br/>Detector: clench · double blink · manual<br/>(seizure detector later)<br/>saves EEG −10/+30 s"]
         AUDIO["audio<br/>16 kHz + mic level"]
         STT["transcriber<br/>Silero VAD + faster-whisper<br/>ar / en / mixed"]
-        SUM["summarizer<br/>Ollama qwen2.5:3b"]
+        SUM["summarizer<br/>Ollama qwen2.5 (7b / 3b)<br/>structured output"]
         UI["dashboard<br/>FastAPI + WebSocket"]
     end
     BRIDGE -->|eeg.raw · eeg.filt| EVENTS
@@ -80,7 +80,7 @@ Requires **Python 3.12+**. No headset is needed for the demo. A microphone is op
 .\bayn run       # real Muse 2 (default source) + mic + dashboard
 .\bayn demo --audio file    # no microphone: plays samples/audio/demo.wav (English + Arabic)
 ```
-Setup downloads about **2 GB** once on a machine with an NVIDIA GPU (Whisper large-v3-turbo + CUDA libraries + the CPU fallback model), or about **0.5 GB** without one. After that everything runs offline.
+Setup also installs **Ollama** (local LLM runtime, via winget on Windows) and downloads the models once: about **7 GB** with a large NVIDIA GPU (Whisper large-v3-turbo + CUDA libraries + qwen2.5:7b), about **2.5 GB** without one (Whisper small + qwen2.5:3b). After that everything runs offline.
 `bayn.cmd` works even though Windows blocks PowerShell scripts by default. It bypasses the policy for that one call only, and nothing on your system changes.
 
 ### macOS / Linux
@@ -96,7 +96,7 @@ pip install -r requirements/dev.txt && pip install -e . --no-deps
 python -m bayn.run --demo
 ```
 
-Other commands: `test`, `doctor` (check a machine before a demo: Bluetooth, Muse, Whisper model, GPU, microphone), `models` (download Whisper models), `mics` (list microphones), `sample-audio` (regenerate the demo WAVs), `bridge`, `ui`, `clean`.
+Other commands: `test`, `doctor` (check a machine before a demo: Bluetooth, Muse, Whisper model, GPU, microphone, Ollama + summary model), `models` (download Whisper + summary models), `eval-summary` (score summary models), `record` / `eval-stt` (score transcription on your own recordings), `mics` (list microphones), `sample-audio` (regenerate the demo WAVs), `bridge`, `ui`, `clean`.
 
 ## Firing an event
 
@@ -135,7 +135,38 @@ Bayn transcribes the microphone **continuously**, so speech from *before* an eve
 
 Switching between sentences works well. A fair benchmark of all Whisper models on recorded classroom audio (with English key terms like "Rutherford" inside Arabic speech) is planned.
 
+**Testing with your own voice:** [docs/CORPUS.md](docs/CORPUS.md) has 12 short scripts to read aloud, the same 4 topics in English, Arabic and mixed (Arabic with English key terms). Record each once with `.ayn record <id>`, then score models on identical audio with `.ayn eval-stt --corpus all`.
+
 Pick a microphone with `BAYN_AUDIO__DEVICE=<part of its name>` (see `.\bayn mics`). With no mic, `--audio file` plays [samples/audio/demo.wav](samples/audio/demo.wav), a fictional English/Arabic narration generated with Windows' offline text-to-speech from [demo_script.json](samples/audio/demo_script.json).
+
+## Summaries
+
+When an event's window closes, the transcript of that window is summarised by a **local LLM through Ollama**. The dashboard shows each step side by side:
+
+**① Heard** (the transcript, with times relative to the event) → **② Context** (EEG description + the exact prompt sent to the model) → **③ Summary**, written live as the model generates it.
+
+| | |
+|---|---|
+| **Model** | `auto`: **qwen2.5:7b** with an NVIDIA GPU of ≥ 10 GB (or Apple Silicon ≥ 16 GB), else **qwen2.5:3b**. Any Ollama model via `summary.model` |
+| **Language** | `auto` = main language of the speech · `en` · `ar` · `both`. Switch in the dashboard. Arabic prompts are written in Arabic |
+| **Format** | Structured output (summary, ≤ 4 key points with times, unclear words), rendered by code, so the format holds in every language |
+| **EEG part** | Written **by code**, not the LLM: dominant rhythm before → after and signal quality per sensor, labelled "not a medical assessment" |
+| **Speed (dev PC)** | RTX 2080 Ti, qwen2.5:7b: first text 0.5 s, full summary ~2–4 s after the window closes |
+| **Saved** | `data/events/<id>/summary.md` + `summary.json`, downloadable from the timeline. ↻ regenerates |
+
+Quality is measured with `.ayn eval-summary` on real classroom transcripts with recognition errors ([TESTING.md](docs/TESTING.md), Phase 5). qwen2.5:7b covers **96 %** of key facts in English and **68 %** in Arabic, with **no invented content** in 12 test summaries. Summaries can still miss details or embellish slightly. They are always marked as generated from an automatic transcript.
+
+## Disk space and the demo laptop
+
+Everything big lives inside this folder, in `models/` (gitignored), so it never fills a small C: drive and can be **copied to another machine**:
+
+| Folder | What | Size |
+|---|---|---|
+| `models/whisper/` | Whisper speech models (large-v3-turbo 1.5 GB, small 0.5 GB, tiny 75 MB) | ~2 GB |
+| `models/ollama/` | Summary LLMs (qwen2.5:7b 4.4 GB, qwen2.5:3b 1.8 GB) | ~6 GB |
+| `.venv/` | Python packages incl. CUDA libraries (NVIDIA only) | ~2.6 GB |
+
+`bayn setup` points Ollama to `models/ollama` through the `OLLAMA_MODELS` user variable, unless you already chose a folder. It also switches off Ollama's cloud features (`OLLAMA_NO_CLOUD=1`). `doctor` shows each folder's size and the free space on its drive, and warns below 5 GB. **For the laptop:** copy the `models/` folder over before running setup, and the downloads are skipped. A CPU-only laptop needs only Whisper `small` + `qwen2.5:3b` (about 2.3 GB). `bayn run` starts Ollama by itself if it isn't running.
 
 ## Configuration
 
@@ -181,7 +212,8 @@ src/bayn/
                  calibration, event manager (cooldown, EEG windows), SQLite store, service
   transcription/ audio capture (mic / WAV), VAD segmenter, Whisper engine, transcript store,
                  service (attaches transcripts to events), model downloader
-  summarization/ Ollama client + prompts                       (Phase 5)
+  summarization/ Ollama client, prompts (en/ar), structured rendering, quality checks,
+                 model choice, service, evaluation tool
   ui/            FastAPI server + static dashboard (no CDN, works offline)
   run.py         one-command launcher     doctor.py  machine check
 scripts/         bayn.ps1 (Windows tasks), claude-session.ps1
@@ -199,7 +231,7 @@ Tests are grouped into `unit`, `integration`, `system` and `hardware` markers. S
 
 ## Privacy
 
-Everything runs locally. No cloud APIs and no analytics. Whisper weights are downloaded **once** by `setup` / `bayn models` into `models/` and then loaded from disk only (`local_files_only`). Hugging Face telemetry is disabled. After setup, the system runs with the network unplugged. Audio is never stored as sound, only as transcript text in `data/`.
+Everything runs locally. No cloud APIs and no analytics. Whisper weights are downloaded **once** by `setup` / `bayn models` into `models/` and then loaded from disk only (`local_files_only`). Hugging Face telemetry is disabled. The LLM runs in a **local** Ollama server (`127.0.0.1:11434`; `doctor` warns if it's pointed elsewhere). After setup, the system runs with the network unplugged. Audio is never stored as sound, only as transcript text in `data/`.
 
 ## License
 

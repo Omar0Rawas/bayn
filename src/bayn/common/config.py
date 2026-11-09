@@ -167,6 +167,19 @@ class BusConfig(BaseModel):
     stt_host: str = "127.0.0.1"
     stt_pub_port: int = 5575
     stt_cmd_port: int = 5576
+    sum_host: str = "127.0.0.1"
+    sum_pub_port: int = 5580
+    sum_cmd_port: int = 5581
+
+
+class SummaryConfig(BaseModel):
+    model: str = "auto"
+    host: str = "http://127.0.0.1:11434"
+    language: Literal["auto", "en", "ar", "both"] = "auto"
+    temperature: float = 0.2
+    max_key_points: int = 4
+    keep_alive: str = "60m"
+    timeout_s: float = 180.0
 
 
 class UIConfig(BaseModel):
@@ -186,6 +199,7 @@ class AppConfig(BaseModel):
     events: EventsConfig = EventsConfig()
     audio: AudioConfig = AudioConfig()
     transcription: TranscriptionConfig = TranscriptionConfig()
+    summary: SummaryConfig = SummaryConfig()
     bus: BusConfig = BusConfig()
     ui: UIConfig = UIConfig()
     logging: LoggingConfig = LoggingConfig()

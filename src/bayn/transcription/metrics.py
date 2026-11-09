@@ -47,6 +47,35 @@ def cer(reference: str, hypothesis: str) -> float:
     return _edit_distance(list(r), list(h)) / max(len(r), 1)
 
 
+_AR_PREFIXES = ("", "و", "ب", "ل", "ف", "ك")     # letters Arabic attaches to the front of a word
+
+
+def term_present(term: str, text: str) -> bool:
+    """Is the term in the text (after normalisation)?
+
+    English and short terms: whole words only ('pi' must not match 'piece', 'ط' not every word with ط).
+    Longer Arabic terms: also inside a word, because Arabic attaches و/ب/ل/ال (والإلكترونات).
+    """
+    words = [w[:-2] if w.endswith("'s") else w for w in normalize(text)]     # sun's -> sun
+    t, k = " " + " ".join(words) + " ", " ".join(normalize(term))
+    if not k:
+        return False
+    arabic = any("؀" <= c <= "ۿ" for c in k)
+    if arabic and len(k) >= 3:
+        core = k[2:] if k.startswith("ال") and len(k) > 4 else k
+        return core in t
+    if arabic:
+        return any(f" {p}{k} " in t for p in _AR_PREFIXES)
+    singular = k[:-1] if k.endswith("s") and len(k) > 3 else k              # electrons ~ electron
+    return any(f" {v} " in t for v in {k, singular, singular + "s"})
+
+
+def key_term_recall(terms: list[str], hypothesis: str) -> tuple[float, list[str]]:
+    """Share of key terms (e.g. English terms inside Arabic speech) that came out correctly."""
+    missing = [k for k in terms if not term_present(k, hypothesis)]
+    return (1 - len(missing) / len(terms) if terms else 1.0), missing
+
+
 def script_mix(text: str) -> dict[str, float]:
     """Share of Arabic vs Latin letters - shows whether code-switched words kept their script."""
     ar = sum("؀" <= c <= "ۿ" for c in text)

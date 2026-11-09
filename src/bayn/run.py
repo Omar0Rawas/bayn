@@ -20,6 +20,7 @@ import webbrowser
 
 from bayn.common.config import load_config
 from bayn.common.log import setup_logging
+from bayn.summarization.ollama_client import ollama_env, ollama_serve_command
 
 log = setup_logging(name="bayn.run")
 
@@ -65,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         # speech side: restarted if it ever dies, so it can't take EEG/triggering down with it
         "audio": ([py, "-m", "bayn.transcription.audio"], True),
         "transcriber": ([py, "-m", "bayn.transcription.service"], True),
+        "summarizer": ([py, "-m", "bayn.summarization.service"], True),
     }
     if cfg.eeg.source == "lsl" and cfg.eeg.lsl.autostart_muselsl:
         cmd = [py, "-m", "muselsl", "stream"]
@@ -74,6 +76,12 @@ def main(argv: list[str] | None = None) -> int:
         elif bf.serial_number:
             cmd += ["--name", bf.serial_number]
         specs["muselsl"] = (cmd, True)
+    # Local LLM: use a running Ollama if there is one, otherwise run `ollama serve` ourselves
+    # (doesn't depend on the Ollama tray app, which may not be running on the demo laptop).
+    if ollama_cmd := ollama_serve_command(cfg.summary.host):
+        specs["ollama"] = (ollama_cmd, True)
+        env.update(ollama_env())                               # local only + the user's model folder
+        log.info("Ollama not running - starting it (models in %s)", env.get("OLLAMA_MODELS", "Ollama's default folder"))
     log.info("EEG source: %s", cfg.eeg.source + (" (simulated, scripted gestures)" if args.demo else ""))
 
     procs: dict[str, subprocess.Popen] = {}

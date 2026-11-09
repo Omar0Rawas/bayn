@@ -56,14 +56,32 @@ switch ($Task) {
     if (-not (Test-Path .env)) { Copy-Item .env.example .env }
     Write-Host "Downloading Whisper models (one time)..."
     & $Py -m bayn.transcription.models
+    if (-not (Get-Command ollama -ErrorAction SilentlyContinue) -and -not (Test-Path "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe")) {
+      if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "Installing Ollama (local LLM runtime)..."
+        winget install --id Ollama.Ollama -e --silent --accept-source-agreements --accept-package-agreements
+      } else { Write-Host "Install Ollama from https://ollama.com, then run: .\bayn models" }
+    }
+    # Keep Ollama's models next to the Whisper models (in this folder), not on a possibly small C: drive,
+    # unless the user already chose a location. Also keep Ollama local-only (no ollama.com cloud features).
+    if (-not [Environment]::GetEnvironmentVariable("OLLAMA_MODELS", "User")) {
+      $om = Join-Path $Root "models\ollama"
+      [Environment]::SetEnvironmentVariable("OLLAMA_MODELS", $om, "User"); $env:OLLAMA_MODELS = $om
+      Write-Host "Ollama models will be stored in $om"
+    }
+    [Environment]::SetEnvironmentVariable("OLLAMA_NO_CLOUD", "1", "User"); $env:OLLAMA_NO_CLOUD = "1"
+    Write-Host "Downloading the summary model (one time)..."
+    & $Py -m bayn.summarization.models
     & $Py -m bayn.doctor
   }
   "demo"   { Require-Venv; & $Py -m bayn.run --demo @Rest }
   "run"    { Require-Venv; & $Py -m bayn.run @Rest }
   "check"  { Require-Venv; & $Py -m bayn.eeg.check @Rest }
-  "models" { Require-Venv; & $Py -m bayn.transcription.models @Rest }
+  "models" { Require-Venv; & $Py -m bayn.transcription.models @Rest; & $Py -m bayn.summarization.models @Rest }
+  "eval-summary" { Require-Venv; & $Py -m bayn.summarization.evaluate @Rest }
   "mics"   { Require-Venv; & $Py -m bayn.transcription.audio --list-devices }
   "record" { Require-Venv; & $Py -m bayn.transcription.record @Rest }
+  "corpus" { Require-Venv; & $Py -m bayn.corpus @Rest }
   "eval-stt" { Require-Venv; & $Py -m bayn.transcription.evaluate @Rest }
   "sample-audio" { Require-Venv; & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "make_sample_audio.ps1") }
   "bridge" { Require-Venv; & $Py -m bayn.eeg.bridge @Rest }
@@ -83,10 +101,12 @@ Bayn tasks:
   run      real Muse 2 (default) + microphone + dashboard
            options: --source lsl|sim   --audio file (play samples/audio/demo.wav instead of the mic)
   check    connect to the headset for 10 s and report signal quality (check --name Muse-3EE1)
-  models   download Whisper models (models --all: GPU + CPU models, e.g. to copy to a laptop)
+  models   download Whisper + summary models (models --all: every variant, e.g. before moving to a laptop)
+  eval-summary  score summary models on the classroom scenarios (eval-summary --models qwen2.5:3b qwen2.5:7b)
   mics     list microphones          sample-audio  regenerate the demo/test WAVs (Windows TTS)
-  record   record the mic to data/recordings/<name>.wav   (record classroom_mixed --seconds 45)
-  eval-stt score transcription strategies on a recording  (eval-stt --scenario mixed)
+  corpus   list the recording corpus (docs/CORPUS.md) and what is recorded; corpus show mx-pi opens one
+  record   record a corpus script (opens it in big type, Enter stops): record mx-pi
+  eval-stt score transcription on recordings: eval-stt --corpus all [--models small large-v3-turbo] [--device cpu]
   bridge   EEG bridge only           ui   dashboard only
   test     run the test suite        doctor  check this machine
   clean    remove caches

@@ -130,8 +130,24 @@
 
     <!-- Summaries -->
     <section class="card summary-card">
-      <div class="card-head"><h2>Summaries</h2><span class="badge muted">Phase 5</span></div>
-      <div class="placeholder"><p>For each event: transcript window &rarr; EEG stats &rarr; summary generated live by a local LLM.</p></div>
+      <div class="card-head">
+        <h2>Summaries</h2>
+        <div class="controls">
+          <label>Summary language
+            <select id="sum-language">
+              <option value="auto">Same as speech</option>
+              <option value="en">English</option>
+              <option value="ar">العربية</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
+          <span class="badge muted" id="sum-model" title="Local LLM (Ollama)">LLM…</span>
+        </div>
+      </div>
+      <div id="summaries"></div>
+      <div class="placeholder" id="summaries-empty">
+        <p>When an event's window closes, its transcript is summarised here by a local LLM: what was heard &rarr; context &rarr; summary, written live.</p>
+      </div>
     </section>
   </main>
 

@@ -41,8 +41,13 @@ TINY_READY = (Path(__file__).parents[1] / "models" / "whisper" / "tiny" / "model
 
 @pytest.fixture
 def running_stack(tmp_path):
-    ui, pub, cmd, epub, ecmd, apub, spub, scmd = (_free_port() for _ in range(8))
+    from tests.fake_ollama import FakeOllama
+
+    ollama = FakeOllama()                       # deterministic stand-in for the local LLM
+    ui, pub, cmd, epub, ecmd, apub, spub, scmd, mpub, mcmd = (_free_port() for _ in range(10))
     env = dict(os.environ, BAYN_EEG__SOURCE="sim", BAYN_UI__PORT=str(ui),
+               BAYN_BUS__SUM_PUB_PORT=str(mpub), BAYN_BUS__SUM_CMD_PORT=str(mcmd),
+               BAYN_SUMMARY__HOST=ollama.url, BAYN_SUMMARY__MODEL="qwen2.5:3b",
                BAYN_BUS__EEG_PUB_PORT=str(pub), BAYN_BUS__EEG_CMD_PORT=str(cmd),
                BAYN_BUS__EVENTS_PUB_PORT=str(epub), BAYN_BUS__EVENTS_CMD_PORT=str(ecmd),
                BAYN_BUS__AUDIO_PUB_PORT=str(apub), BAYN_BUS__STT_PUB_PORT=str(spub), BAYN_BUS__STT_CMD_PORT=str(scmd),
@@ -61,7 +66,7 @@ def running_stack(tmp_path):
                BAYN_DATA_DIR=str(tmp_path))
     modules = ["bayn.eeg.bridge", "bayn.events.service", "bayn.ui.server"]
     if TINY_READY:
-        modules += ["bayn.transcription.audio", "bayn.transcription.service"]
+        modules += ["bayn.transcription.audio", "bayn.transcription.service", "bayn.summarization.service"]
     procs = [subprocess.Popen([sys.executable, "-m", m], env=env) for m in modules]
     try:
         _wait_http(f"http://127.0.0.1:{ui}/api/health")
@@ -71,6 +76,7 @@ def running_stack(tmp_path):
             p.terminate()
         for p in procs:
             p.wait(timeout=10)
+        ollama.close()
 
 
 def test_end_to_end_simulated_pipeline(running_stack):
@@ -217,9 +223,9 @@ def test_live_transcript_and_event_transcript(running_stack):
             state["event_id"] = m["id"]
 
     def until(ms):
-        return any(m["type"] == "transcript_window" and m["event_id"] == state.get("event_id") for m in ms)
+        return any(m["type"] == "summary" and m["event_id"] == state.get("event_id") for m in ms)
 
-    msgs = asyncio.run(_collect(ui, until, 90, actions))
+    msgs = asyncio.run(_collect(ui, until, 120, actions))
     seg = state["seg"]
     assert seg["lang"] == "en" and "time" in seg["text"].lower()
     assert seg["t_end"] > seg["t_start"] > time.time() - 60          # unix timestamps
@@ -233,6 +239,16 @@ def test_live_transcript_and_event_transcript(running_stack):
     ev = [e for e in json.loads(urllib.request.urlopen(f"http://127.0.0.1:{ui}/api/events").read())
           if e["id"] == win["event_id"]][0]
     assert ev["transcript"]["n_segments"] == win["n_segments"] and ev["state"] == "saved"
+    # Phase 5: the window's transcript is summarised and streamed to the browser
+    started = [m for m in msgs if m["type"] == "summary_token" and m.get("started")]
+    assert started and started[0]["prompt"][1]["content"].count("[") >= 1          # prompt carries the transcript
+    assert any(m["type"] == "summary_token" and m.get("text") for m in msgs)       # text appeared while writing
+    summ = [m for m in msgs if m["type"] == "summary"][-1]
+    assert summ["error"] is None and summ["lang"] == "en"
+    assert summ["markdown"].startswith("### Event: Manual trigger") and "**Summary:**" in summ["markdown"]
+    assert "not a medical assessment" in summ["markdown"]                          # code-written EEG section
+    md = urllib.request.urlopen(f"http://127.0.0.1:{ui}/api/events/{win['event_id']}/summary.md").read().decode()
+    assert "**Key points:**" in md
 
 
 def test_bad_gesture_rejected(running_stack):

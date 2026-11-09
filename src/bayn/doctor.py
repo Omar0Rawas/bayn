@@ -8,6 +8,7 @@ Reports, never changes anything. Exit code 1 only for problems that block the de
 from __future__ import annotations
 
 import importlib
+import os
 import platform
 import shutil
 import socket
@@ -103,6 +104,57 @@ def _check_speech(cfg) -> None:
             _add(WARN, "Microphone", f"no input device ({e}) - plug one in, or use --audio file")
 
 
+def _check_ollama(cfg) -> None:
+    """Local LLM runtime reachable + the summary model this machine should use is pulled."""
+    from bayn.summarization.models import resolve_model
+    from bayn.summarization.ollama_client import OllamaClient
+
+    from bayn.summarization.ollama_client import find_ollama
+
+    client = OllamaClient(cfg.summary.host)
+    version = client.version()
+    if version is None:
+        if find_ollama():
+            _add(INFO, "Ollama", "installed, not running - `bayn run`/`demo` start it automatically "
+                                 "(model check skipped)")
+        else:
+            _add(WARN, "Ollama", "not installed (https://ollama.com, or `bayn setup`) - summaries are off until then")
+        return
+    if not cfg.summary.host.startswith(("http://127.0.0.1", "http://localhost")):
+        _add(WARN, "Ollama host", f"{cfg.summary.host} is not local - Bayn is meant to run offline")
+    available = client.models()
+    model = resolve_model(cfg.summary, available)
+    have = model in available or f"{model}:latest" in available
+    _add(OK if have else FAIL, "Summary model", f"{model} via Ollama {version} - "
+         + ("ready" if have else "missing: run `bayn models`"))
+
+
+def _folder_gb(path) -> float:
+    try:
+        return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / 2**30
+    except OSError:
+        return 0.0
+
+
+def _check_disk() -> None:
+    """Where the big files live and how much room is left (laptops often have a small C: drive)."""
+    from pathlib import Path
+
+    from bayn.common.config import DATA_DIR, MODELS_DIR
+
+    from bayn.summarization.ollama_client import ollama_env
+
+    ollama_dir = Path(ollama_env().get("OLLAMA_MODELS") or Path.home() / ".ollama" / "models")
+    places = {"Whisper models": MODELS_DIR / "whisper", "Ollama models": ollama_dir, "Bayn data": DATA_DIR}
+    for what, path in places.items():
+        if not path.exists():
+            continue
+        free = shutil.disk_usage(path).free / 2**30
+        level = OK if free >= 5 else WARN
+        _add(level, what, f"{_folder_gb(path):.1f} GB in {path} - {free:.0f} GB free on that drive"
+             + ("" if free >= 5 else " (low! set OLLAMA_MODELS / BAYN_MODELS_DIR to a bigger drive)"))
+
+
 def check() -> int:
     v = sys.version_info
     _add(OK if v >= (3, 12) else FAIL, "Python", f"{platform.python_version()} ({'needs 3.12+' if v < (3, 12) else 'supported'})")
@@ -137,7 +189,8 @@ def check() -> int:
     _check_speech(cfg)
 
     # Later phases - reported now so a new machine can be prepared early.
-    _add(INFO if shutil.which("ollama") else WARN, "Ollama", "installed" if shutil.which("ollama") else "not installed (needed from Phase 5: https://ollama.com)")
+    _check_ollama(cfg)
+    _check_disk()
 
     width = max(len(w) for _, w, _ in _results)
     for level, what, detail in _results:

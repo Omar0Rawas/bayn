@@ -284,7 +284,8 @@ function renderTimeline() {
     const tr = m.transcript;
     const links = (saved && m.files
       ? `<a href="/api/events/${m.id}/eeg.csv" download>EEG .csv</a> <a href="/api/events/${m.id}/eeg.npz" download>.npz</a>` : "")
-      + (tr ? ` <a href="/api/events/${m.id}/transcript.txt" download>🗣 transcript (${tr.n_segments})</a>` : "");
+      + (tr ? ` <a href="/api/events/${m.id}/transcript.txt" download>🗣 transcript (${tr.n_segments})</a>` : "")
+      + (m.summary ? ` <a href="/api/events/${m.id}/summary.md" download>📝 summary</a>` : "");
     const detail = m.info && m.info.gap_s ? ` · gap ${m.info.gap_s}s` : "";
     return `<li>
       <div class="tl-head"><b>${m.label}${SOURCE_TEXT[m.source] || ""}</b><time>${fmtTime(m.t)}</time></div>
@@ -398,6 +399,117 @@ function renderAudioStatus(m) {
 function onTranscriptWindow(m) {
   const e = events.get(m.event_id);
   if (e) { e.transcript = { n_segments: m.n_segments, languages: m.languages }; renderTimeline(); }
+  sumEntry(m.event_id).segments = m.segments;
+  renderSummaries();
+}
+
+// ------------------------------------------------------------------ summaries: heard -> context -> summary
+const sums = new Map();   // event_id -> {segments, t_event, langs: {lang: {...}}, active}
+
+// minimal, safe markdown: **bold**, "- " bullets, ### headings, _italic_ (everything else escaped)
+function md(text) {
+  const out = []; let list = false;
+  for (const raw of (text || "").split("\n")) {
+    let line = escapeHtml(raw).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|\s)_(.+?)_(\s|$)/g, "$1<em>$2</em>$3");
+    if (/^-\s/.test(raw)) { if (!list) { out.push("<ul>"); list = true; } out.push(`<li dir="auto">${line.slice(2)}</li>`); continue; }
+    if (list) { out.push("</ul>"); list = false; }
+    if (raw.startsWith("### ")) out.push(`<p dir="auto"><b>${line.slice(4)}</b></p>`);
+    else if (raw.trim()) out.push(`<p dir="auto">${line}</p>`);
+  }
+  if (list) out.push("</ul>");
+  return out.join("");
+}
+
+function sumEntry(id) {
+  if (!sums.has(id)) sums.set(id, { segments: null, langs: {}, active: null });
+  return sums.get(id);
+}
+
+function renderSummaries() {
+  const open = new Set([...document.querySelectorAll("#summaries details[open]")].map((d) => d.dataset.key));
+  renderSummariesInner();
+  document.querySelectorAll("#summaries details").forEach((d) => { if (open.has(d.dataset.key)) d.open = true; });
+}
+
+function renderSummariesInner() {
+  const ids = [...sums.keys()].filter((id) => events.has(id)).sort((a, b) => events.get(b).t - events.get(a).t).slice(0, 8);
+  $("summaries-empty").style.display = ids.length ? "none" : "";
+  $("summaries").innerHTML = ids.map((id) => {
+    const s = sums.get(id), e = events.get(id);
+    const langs = Object.keys(s.langs);
+    const lang = s.active && s.langs[s.active] ? s.active : langs[0];
+    const cur = s.langs[lang] || {};
+    const heard = s.segments == null ? `<p class="muted small">waiting for the transcript…</p>`
+      : s.segments.length ? `<ol class="heard">${s.segments.map((g) => `<li dir="auto"><time>${(g.t_start - e.t >= 0 ? "+" : "") + (g.t_start - e.t).toFixed(0)} s</time>${escapeHtml(g.text)}</li>`).join("")}</ol>`
+      : `<p class="muted small">no speech in this window</p>`;
+    const tabs = langs.length > 1 ? `<span class="tabs">${langs.map((l) => `<button data-sum="${id}" data-lang="${l}" class="${l === lang ? "on" : ""}">${l.toUpperCase()}</button>`).join("")}</span>` : "";
+    const prompt = cur.prompt ? `<details data-key="${id}-${lang}"><summary>Prompt sent to the LLM</summary><pre dir="auto">${escapeHtml(cur.prompt.map((m) => `[${m.role}]\n${m.content}`).join("\n\n"))}</pre></details>` : "";
+    const body = cur.error ? `<p class="err">⚠ ${escapeHtml(cur.error)}</p>`
+      : cur.text ? `<div class="md ${cur.final ? "" : "writing"}">${md(cur.text)}</div>`
+      : cur.started ? `<div class="md writing"></div>` : `<p class="muted small">queued…</p>`;
+    const meta = cur.final && !cur.error ? `<p class="sum-meta">${cur.model} · ${cur.seconds} s${cur.tokens_per_s ? ` · ${cur.tokens_per_s} tok/s` : ""}</p>` : "";
+    return `<article class="sum">
+      <div class="sum-head"><b>${escapeHtml(e.label)}${SOURCE_TEXT[e.source] || ""} · ${fmtTime(e.t)}</b>
+        <span class="actions">${tabs}
+          <button class="btn ghost" data-regen="${id}" data-lang="${lang || ""}" type="button">↻ Regenerate</button>
+          ${cur.final ? `<a href="/api/events/${id}/summary.md" download>summary.md</a>` : ""}</span></div>
+      <div class="sum-grid">
+        <div class="sum-col"><h3>① Heard</h3>${heard}</div>
+        <div class="sum-col"><h3>② Context</h3><div class="md">${md(cur.eeg || "")}</div>${prompt}</div>
+        <div class="sum-col"><h3>③ Summary${cur.model ? " · " + escapeHtml(cur.model) : ""}</h3>${body}${meta}</div>
+      </div></article>`;
+  }).join("");
+}
+
+function onSummaryToken(m) {
+  const s = sumEntry(m.event_id);
+  const cur = (s.langs[m.lang] = s.langs[m.lang] || {});
+  if (m.started) Object.assign(cur, { started: true, final: false, error: null, prompt: m.prompt, eeg: m.eeg, model: m.model, text: "" });
+  if (m.text) cur.text = m.text;
+  s.active = s.active || m.lang;
+  renderSummaries();
+}
+
+function onSummaryDone(m) {
+  const s = sumEntry(m.event_id);
+  s.langs[m.lang] = { ...s.langs[m.lang], ...m, text: m.llm_text, final: true, started: true };
+  s.active = s.active || m.lang;
+  const e = events.get(m.event_id);
+  if (e) { e.summary = { languages: Object.keys(s.langs) }; renderTimeline(); }
+  renderSummaries();
+}
+
+async function loadSummaryHistory() {
+  // past events: fetch saved transcript + summary files (most recent few)
+  const recent = [...events.values()].filter((e) => e.transcript || e.summary).sort((a, b) => b.t - a.t).slice(0, 5);
+  for (const e of recent) {
+    const s = sumEntry(e.id);
+    try {
+      const tr = await (await fetch(`/api/events/${e.id}/transcript.json`)).json();
+      s.segments = tr.segments;
+    } catch (err) { /* not there yet */ }
+    try {
+      for (const r of await (await fetch(`/api/events/${e.id}/summary.json`)).json())
+        s.langs[r.lang] = { ...r, text: r.llm_text, final: true, started: true };
+    } catch (err) { /* not summarised yet */ }
+  }
+  renderSummaries();
+}
+
+document.addEventListener("click", (ev) => {
+  const t = ev.target.closest("[data-sum],[data-regen]");
+  if (!t) return;
+  if (t.dataset.sum) { sumEntry(t.dataset.sum).active = t.dataset.lang; renderSummaries(); }
+  if (t.dataset.regen) post("/api/summary/regenerate", { event_id: t.dataset.regen, lang: t.dataset.lang || null });
+});
+
+function renderSumStatus(m) {
+  const b = $("sum-model");
+  b.className = "badge " + (m.state === "ready" ? "" : m.state === "error" ? "bad-badge" : "muted");
+  b.textContent = m.state === "ready" ? `${m.model} · ready` : m.state === "loading" ? `loading ${m.model || "LLM"}…` : m.state === "error" ? "LLM off" : "LLM…";
+  b.title = m.message || (m.last && m.last.seconds ? `last summary ${m.last.seconds} s, ${m.last.tokens_per_s} tok/s` : "Local LLM via Ollama");
+  const sel = $("sum-language");
+  if (document.activeElement !== sel && sel.value !== m.language) sel.value = m.language;
 }
 
 async function post(url, body) {
@@ -432,7 +544,11 @@ function connect(delay = 500) {
       case "event_history":
         for (const e of m.events) events.set(e.id, e);
         renderTimeline();
+        loadSummaryHistory();
         break;
+      case "summary_token": onSummaryToken(m); break;
+      case "summary": onSummaryDone(m); break;
+      case "summary_status": renderSumStatus(m); break;
       case "transcript": addSegment(m); break;
       case "transcript_history": m.segments.forEach(addSegment); break;
       case "transcript_partial": $("partial").textContent = m.done ? "" : (m.text ? "… " + m.text : ""); break;
@@ -470,6 +586,7 @@ document.addEventListener("keydown", (e) => {
 $("btn-trigger").addEventListener("click", () => post("/api/events/trigger", { source: "button" }));
 $("gesture").addEventListener("change", (e) => post("/api/events/gesture", { gesture: e.target.value }));
 $("language").addEventListener("change", (e) => post("/api/transcription/language", { language: e.target.value }));
+$("sum-language").addEventListener("change", (e) => post("/api/summary/language", { language: e.target.value }));
 $("btn-calibrate").addEventListener("click", () => post("/api/events/calibration", { action: "start" }));
 $("cal-cancel").addEventListener("click", () => post("/api/events/calibration", { action: "cancel" }));
 $("cal-close").addEventListener("click", () => { $("cal-overlay").hidden = true; });

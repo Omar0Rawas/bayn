@@ -1,5 +1,30 @@
 {
   "_about": "Realistic scenario recorded live by the user on 2026-11-09 (dev PC, GoXLR mic, Whisper large-v3-turbo on GPU, language mode 'mixed', manual trigger, -10/+30 s window). A teacher explains evaporation. 'reference' is the script that was read aloud; 'live_transcript' is exactly what Bayn produced. Used to (1) score transcription strategies (WER/CER) and (2) test summarization on imperfect, real transcripts (Phase 5). No audio is stored here.",
+  "summary_checks": {
+    "_about": "Automatic checks for summaries of this scenario (bayn eval-summary). A fact counts as covered when every keyword group has at least one match (case-insensitive, Arabic normalised). 'in' = variants whose LIVE transcript contains the fact (a summary can't know facts the recogniser lost). 'forbidden' = invented content: recognition errors repeated as facts, unrelated chatter, medical claims.",
+    "facts": [
+      {"name": "cup of water by the window", "in": ["english", "arabic"],
+       "en": [["cup", "glass", "container", "water"], ["window"]],
+       "ar": [["كاس", "كوب", "كاسه", "وعاء", "موي", "ماء"], ["شباك", "نافذ"]]},
+      {"name": "water level went down", "in": ["english", "arabic"],
+       "en": [["level", "water"], ["down", "drop", "decreas", "lower", "less", "fell"]],
+       "ar": [["مستوي", "الماء", "الموي"], ["انخفض", "نزل", "قل", "نقص", "هبط"]]},
+      {"name": "sun heats water into vapour", "in": ["english", "arabic", "mixed"],
+       "en": [["sun", "heat"], ["vapor", "vapour", "steam"]],
+       "ar": [["شمس", "حراره", "سخن", "تسخين"], ["بخار", "vapor", "غاز"]]},
+      {"name": "the process is called evaporation", "in": ["english", "arabic", "mixed"],
+       "en": [["evaporat"]], "ar": [["تبخر", "evaporat"]]},
+      {"name": "question: what happens when vapour cools", "in": ["english"],
+       "en": [["cool", "cold", "chill"]], "ar": [["يبرد", "برد", "تبريد", "بروده"]]}
+    ],
+    "forbidden": {
+      "_about": "includes meaning flips: the water level went DOWN, so 'rose' is an invented (opposite) fact",
+      "en": ["happy", "noise", "black clover", "seizure", "diagnos", "epilep", "level rose", "level increased",
+             "level went up", "level had risen"],
+      "ar": ["سعيد", "فرح", "ضجيج", "بلاك", "نوبه", "تشخيص", "صرع", "ارتفع مستوى", "ارتفاع مستوى",
+             "الماء ارتفع", "زاد مستوى"]
+    }
+  },
   "variants": {
     "english": {
       "language": "en",

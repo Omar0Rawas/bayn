@@ -100,6 +100,16 @@ transcription:
   event_grace_s: 20        # max wait for speech still in progress when an event window closes
   event_tail_s: 4          # finish a sentence that runs past the window end (up to this long)
 
+summary:
+  model: auto              # auto = qwen2.5:7b with an NVIDIA GPU >= 10 GB (or Apple Silicon >= 16 GB),
+                           # else qwen2.5:3b. Or any Ollama model; compare with `bayn eval-summary`
+  host: http://127.0.0.1:11434   # local Ollama server (never a cloud endpoint)
+  language: auto           # auto = main language of the transcript | en | ar | both
+  temperature: 0.2
+  max_key_points: 4
+  keep_alive: 60m          # keep the model loaded so summaries start instantly
+  timeout_s: 180
+
 bus:
   bind_host: 127.0.0.1     # interface producers bind to
   eeg_host: 127.0.0.1      # where consumers find the EEG bridge
@@ -113,6 +123,9 @@ bus:
   stt_host: 127.0.0.1
   stt_pub_port: 5575       # transcript segments, partials, status (PUB)
   stt_cmd_port: 5576       # language choice (PULL)
+  sum_host: 127.0.0.1
+  sum_pub_port: 5580       # summary tokens, finished summaries, status (PUB)
+  sum_cmd_port: 5581       # regenerate, summary language (PULL)
 
 ui:
   host: 127.0.0.1

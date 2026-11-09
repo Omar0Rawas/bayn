@@ -120,4 +120,39 @@ Added: sentence tail for event transcripts (D15), WER/CER metrics, `bayn record`
 "pie", "Rutherford", which must not be lost); record them once and benchmark ALL Whisper models × devices × strategies
 on the same audio files (WER, CER, key-term recall, latency) to understand limits and pick defaults per machine.
 
-Next: Phase 5 (Ollama summaries).
+## Phase 5 — local LLM summaries ✅ (user-tested 2026-11-09: live capture + summaries "very satisfactory")
+Built:
+- Ollama installed on the dev PC (winget); `bayn setup` installs it (Windows) and pulls the model; `bayn models`.
+- `summarizer` process (5580 pub / 5581 cmd): on `transcript.window` → structured summary via Ollama
+  (`format` = JSON schema: summary, ≤ 4 key points, unclear) → rendered by code with localised headings → streamed
+  to the dashboard as it is written (partial JSON rendering) → summary.md/json in the event folder. Model preloaded at
+  start; one retry; 60 s stall timeout; no-speech windows skip the LLM; regenerate + language (auto/en/ar/both).
+- Prompts in the output language (Arabic instructions for Arabic output), rules against inventing / repeating
+  recognition errors, worked example on an unrelated topic. EEG section written by code (not the LLM).
+- `model: auto` → qwen2.5:7b with NVIDIA ≥ 10 GB (or Apple Silicon ≥ 16 GB), else qwen2.5:3b.
+- Dashboard Summaries card: ① heard → ② context (EEG + exact prompt) → ③ summary writing live; EN/AR tabs.
+- `bayn eval-summary`: automatic quality checks on the classroom scenarios (facts, invented incl. meaning flips,
+  language, format), model comparison, `--rescore`.
+
+Results: qwen2.5:7b structured: facts 96 % (en) / 68 % (ar), 0/12 invented, 3.3 s. llama3.2:3b rejected (invented
+content, wrong language, loops). End to end on GPU: summary 2.4 s after the window closed. 121 tests (97 unit,
+16 integration, 6 system, 2 hardware).
+
+Decisions / gotchas: structured output beat free markdown (fixed Arabic format, stopped line-by-line translation,
+avoided a "level rose" meaning flip). Parked LLMs + Whisper oversubscribed the GPU (D17) → stall timeout, evaluation
+unloads models, 7b only with ≥ 10 GB.
+
+Follow-up (user requests, 2026-11-09):
+- **Laptop is the end goal** (CLAUDE.md, memory): every change checked for CPU-only, VRAM budget, disk, offline.
+- **Disk**: dev PC C: had 5.2 GB free. Ollama models moved to models/ollama (OLLAMA_MODELS), pip cache purged,
+  llama3.2:3b removed → 14.7 GB free. Setup defaults to this; `doctor` shows sizes + free space; `bayn run` starts
+  `ollama serve` itself (tray app unreliable) with OLLAMA_NO_CLOUD=1 (Ollama 0.40 had cloud features on).
+- **Recording corpus**: docs/CORPUS.md (tests/data/corpus.json): 12 scripts, 4 topics × en / ar / mixed;
+  `bayn record <id>`, `bayn eval-stt --corpus all [--models ...] [--device cpu]` with key-term recall.
+  Display only: one sentence per line, English words inside Arabic isolated + bold (right-to-left layout moved
+  them); `bayn record` / `bayn corpus show <id>` open an offline reading page (terminals can't render Arabic).
+  All 12 scripts recorded by the user (data/recordings, not committed).
+
+User test: live mic capture + summaries in the dashboard confirmed working well. Phase 5 committed.
+
+Next: corpus benchmark (`bayn eval-stt --corpus all --models ...`, GPU and `--device cpu` for the laptop), then Phase 6.

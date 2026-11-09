@@ -25,10 +25,13 @@ setup: $(PY)
 	$(PY) -m pip install -e . --no-deps --quiet
 	@test -f .env || cp .env.example .env
 	$(PY) -m bayn.transcription.models
+	@command -v ollama >/dev/null 2>&1 || echo "Install Ollama from https://ollama.com, then run: make models"
+	-$(PY) -m bayn.summarization.models
 	$(PY) -m bayn.doctor
 
 models:
 	$(PY) -m bayn.transcription.models $(ARGS)
+	$(PY) -m bayn.summarization.models $(ARGS)
 
 mics:
 	$(PY) -m bayn.transcription.audio --list-devices

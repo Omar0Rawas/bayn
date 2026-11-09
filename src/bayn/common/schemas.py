@@ -26,6 +26,10 @@ TOPIC_TRANSCRIPT_PARTIAL = "transcript.partial"  # in-progress text of the curre
 TOPIC_TRANSCRIPT_STATUS = "transcript.status"    # model, device, language, latency
 TOPIC_TRANSCRIPT_WINDOW = "transcript.window"    # transcript attached to an event window
 
+TOPIC_SUMMARY_TOKEN = "summary.token"        # streamed piece of a summary being written
+TOPIC_SUMMARY = "summary.done"               # finished summary for an event
+TOPIC_SUMMARY_STATUS = "summary.status"      # Ollama reachable, model, last speed
+
 AUDIO_SR = 16000                             # Whisper's sample rate
 
 GESTURES = ("clench", "double_blink", "blink")

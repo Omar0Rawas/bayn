@@ -3,6 +3,15 @@
 Local hackathon demo: Muse 2 EEG -> on-command gesture trigger -> Whisper live transcript -> Ollama summary.
 Prototype, NOT a medical device. Current status and next steps: docs/PROGRESS.md (update it at the end of every phase).
 
+## END GOAL: it must run fine on the demo LAPTOP (user, 2026-11-09)
+Check every change against the laptop, not just the dev PC:
+- CPU-only path works (Whisper small, qwen2.5:3b) and stays real-time; nothing assumes CUDA.
+- GPU memory budget: Whisper turbo (~2.5 GB) + LLM must fit together (7b only with >= 10 GB VRAM).
+- **Disk space**: laptops often have a small C: drive. All models live in the repo's models/ folder
+  (models/whisper, models/ollama via OLLAMA_MODELS) and can be copied to the laptop; `doctor` shows sizes + free space.
+- Setup from scratch with one command; offline after setup; `doctor` must flag anything missing.
+- Don't rely on background apps (e.g. the Ollama tray app): `bayn run` starts what it needs.
+
 ## Working agreement
 - Work in the agreed phases (see docs/PROGRESS.md). **Stop after each phase** so the user can test; commit only after they confirm.
 - Developed on a desktop PC (Windows 10, RTX 2080 Ti), demoed on a different laptop with unknown hardware:
@@ -21,6 +30,11 @@ Prototype, NOT a medical device. Current status and next steps: docs/PROGRESS.md
 - Processes: eeg bridge (5555 pub / 5556 cmd), events service (5560 pub / 5561 cmd), audio (5570 pub),
   transcriber (5575 pub / 5576 cmd), dashboard (8080). `bayn.run` starts all of them; audio + transcriber are
   restarted if they die and the transcriber has a degraded mode (no model → error status, rest keeps running).
+- Summarizer (5580 pub / 5581 cmd): Ollama at 127.0.0.1:11434 (installed on dev PC at
+  %LOCALAPPDATA%\Programs\Ollama). Structured output (JSON schema) rendered by code; EEG section written by code,
+  never by the LLM. model auto = qwen2.5:7b if NVIDIA >= 10 GB else 3b. Unload models you load for experiments
+  (keep_alive 0) — parked models + Whisper stalled the GPU once (D17). Measure prompt/model changes with
+  `bayn eval-summary` (classroom scenarios), never by eye alone.
 - **No Docker** (dropped by the user): Bluetooth, mic and GPU all need native processes.
 - Whisper: models/whisper/<name>/ loaded with local_files_only; downloaded only by `bayn models`. auto = large-v3-turbo
   on CUDA (float16, beam 5, live partials), small on CPU (int8, beam 1). CUDA DLLs from pip nvidia-* wheels are added
@@ -37,7 +51,11 @@ Prototype, NOT a medical device. Current status and next steps: docs/PROGRESS.md
 - muselsl needs bitstring<5.
 
 ## Commands (Windows)
-- `.\bayn setup | demo | run | check | models | mics | sample-audio | test | doctor` (`--audio file` = no mic) (bayn.cmd wraps scripts/bayn.ps1 with ExecutionPolicy Bypass,
+- `.\bayn setup | demo | run | check | models | mics | corpus | record | eval-stt | eval-summary | sample-audio | test | doctor`
+  (`--audio file` = no mic)
+- Recording corpus: tests/data/corpus.json (source) → docs/CORPUS.md (`python -m bayn.corpus render`; a test fails if
+  stale). 4 topics × en / ar / mixed (Arabic + English key terms). `bayn record <id>`, `bayn eval-stt --corpus all
+  --models ... --device cpu` = the planned model benchmark. Recordings in data/recordings (never committed). (bayn.cmd wraps scripts/bayn.ps1 with ExecutionPolicy Bypass,
   because Windows blocks .ps1 scripts by default)
 - Tests: `.\.venv\Scripts\python.exe -m pytest` (no hardware needed); levels via `-m unit|integration|system`;
   real headset: `$env:BAYN_HARDWARE=1; ... -m hardware -v -s`.

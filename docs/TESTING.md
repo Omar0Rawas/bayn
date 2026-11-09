@@ -5,7 +5,7 @@ This document describes how Bayn is verified: which tests exist at each level (u
 > [!IMPORTANT]
 > Bayn is a hackathon prototype, **not a medical device**. "Validation" here means *engineering* verification and validation: does the software do what the design says, on real hardware, reliably enough for a live demo? **No clinical validation has been done, and none is claimed.**
 
-**Status:** Phases 1–4 tested. On the real headset the jaw-clench trigger works; the rule-based double blink does not yet (finding F1, ML fix planned for Phase 6). Phase 4 transcription is verified with recorded audio on GPU and CPU; the live-mic check is pending with the user. Phases 5–8 have test plans with acceptance criteria, filled in as each phase lands.
+**Status:** Phases 1–5 tested, including the user's live-mic check of Phase 5 summaries in the dashboard. On the real headset the jaw-clench trigger works; the rule-based double blink does not yet (finding F1, ML fix planned for Phase 6). Phase 4 transcription is verified with recorded audio on GPU and CPU and live by the user; the 12-script corpus is recorded for the model benchmark. Phases 5–8 have test plans with acceptance criteria, filled in as each phase lands.
 Last updated: 2026-11-09.
 
 ---
@@ -28,13 +28,13 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 
 | Level | Purpose | Location | Count | Runtime | Runs |
 |---|---|---|---|---|---|
-| **Unit** | One function or class in isolation. No sockets, threads, devices or ML models. Detector and event-manager tests stream minutes of simulated EEG through the logic offline, in seconds. The segmenter uses a simple energy VAD stand-in. | `tests/test_filters.py`, `test_buffer_quality.py`, `test_simulator.py`, `test_bands.py`, `test_detectors.py`, `test_events_manager.py`, `test_transcription_unit.py`, `test_transcription_eval.py`, parts of `test_bus_config.py` and `test_sources.py` | 86 | ~25 s | Every `test` run |
-| **Integration** | Several components together across real boundaries: TCP sockets, threads, asyncio, BrainFlow's native library (synthetic board), LSL networking, real Silero VAD + Whisper models. | `test_bus_config.py`, `test_sources.py`, `test_transcription_models.py`, `test_transcription_eval.py` | 10 | ~20 s | Every `test` run |
-| **System** | The real `bridge`, `events`, `audio`, `transcriber` and `dashboard` *processes*, end to end, driven like a browser would (WebSocket + REST). Simulated EEG, WAV audio. | `tests/test_system.py` | 6 | ~60 s | Every `test` run |
+| **Unit** | One function or class in isolation. No sockets, threads, devices or ML models. Detector and event-manager tests stream minutes of simulated EEG through the logic offline, in seconds. The segmenter uses a simple energy VAD stand-in. | `tests/test_filters.py`, `test_buffer_quality.py`, `test_simulator.py`, `test_bands.py`, `test_detectors.py`, `test_events_manager.py`, `test_transcription_unit.py`, `test_transcription_eval.py`, `test_summarization.py`, parts of `test_bus_config.py` and `test_sources.py` | 97 | ~25 s | Every `test` run |
+| **Integration** | Several components together across real boundaries: TCP sockets, threads, asyncio, BrainFlow's native library (synthetic board), LSL networking, real Silero VAD + Whisper models, Ollama API (fake server; real model when running). | `test_bus_config.py`, `test_sources.py`, `test_transcription_models.py`, `test_transcription_eval.py`, `test_summarization.py` | 16 | ~30 s | Every `test` run |
+| **System** | The real `bridge`, `events`, `audio`, `transcriber`, `summarizer` and `dashboard` *processes*, end to end, driven like a browser would (WebSocket + REST). Simulated EEG, WAV audio. | `tests/test_system.py` | 6 | ~60 s | Every `test` run |
 | **Hardware-in-the-loop** | The real Muse 2 over Bluetooth, through both acquisition paths. | `tests/test_hardware.py` | 2 | ~45 s | On demand, with headset |
 | **Manual acceptance** | A human checks the dashboard, ergonomics and demo flow against a checklist. | §4 (per phase), §6 | – | minutes | End of each phase |
 
-### 2.1 Unit tests (86)
+### 2.1 Unit tests (97)
 
 | Area | Test | Verifies |
 |---|---|---|
@@ -88,13 +88,16 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 | | `test_arabic_lean_keeps_mixed_utterances_in_arabic`, `test_initial_prompt_modes` | optional code-switching strategies (off by default) |
 | | `test_event_transcript_finishes_the_sentence_in_progress` | regression for D15 |
 | | `test_classroom_scenarios_are_complete` | scenario fixture is well-formed (also used for summaries) |
+| Summaries | `test_output_language_follows_the_transcript`, `test_prompt_has_rules_json_example_and_relative_times`, `test_arabic_prompt_is_written_in_arabic`, `test_schema_caps_key_points` | output language; rules, unrelated JSON example, relative times; Arabic instructions in Arabic; ≤ N key points |
+| | `test_render_localised_headings`, `test_partial_render_streams_text_while_json_is_incomplete`, `test_eeg_section_is_written_by_code_not_the_llm`, `test_assembled_document_has_disclaimer` | rendering incl. half-finished JSON while streaming; code-written EEG section; disclaimer |
+| | `test_quality_check_rewards_facts_and_catches_flips_and_wrong_language`, `test_facts_only_required_where_the_transcript_has_them`, `test_auto_model_depends_on_gpu_memory` | quality checks; `auto` model by GPU memory |
 | Bus / config | `test_pack_roundtrip_ndarray`, `test_schema_roundtrip` | msgpack + NumPy and message schemas survive serialization |
 | | `test_env_overrides_typed`, `test_bad_notch_rejected` | `BAYN_*` overrides get the right types; invalid values rejected |
 | Sources | `test_sample_clock_regularises_jitter` | ±20 ms packet jitter → perfectly regular timeline |
 | | `test_sample_clock_reanchors_after_gap` | a 4 s dropout re-anchors the clock |
 | | `test_unknown_brainflow_board_rejected` | invalid board name raises |
 
-### 2.2 Integration tests (10)
+### 2.2 Integration tests (16)
 
 | Test | Components | Verifies |
 |---|---|---|
@@ -108,6 +111,9 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 | `test_arabic_clip_detected_as_arabic` | same, Arabic clip, `mixed` mode | language `ar`, Arabic script in the output |
 | `test_silero_vad_segments_the_mixed_demo` | Silero VAD + segmenter + Whisper on the 55 s demo | 7–20 utterances; both `en` and `ar` detected |
 
+| `test_client_streams_tokens_and_reports_speed`, `test_client_error_and_unreachable`, `test_stalled_model_times_out_instead_of_hanging` | Ollama client ↔ fake Ollama server | streaming, JSON schema sent, error lines, unreachable host, stall timeout (D17) |
+| `test_service_summarises_window_streams_and_saves`, `test_service_handles_no_speech_and_llm_failure` | summarizer service ↔ fake Ollama + event store | en + ar streamed and saved, event row updated; no-speech path; failure + retry |
+| `test_real_model_summarises_the_english_classroom_scenario` | real Ollama model (skipped if not running) | ≥ 60 % facts, nothing invented, right language + format |
 | `test_evaluation_tool_scores_strategies_on_a_clip` | `bayn eval-stt` logic: VAD + Whisper + metrics | every requested strategy scored on the same utterances |
 
 The four Whisper tests are skipped if the `tiny` model isn't downloaded (`bayn models`).
@@ -120,7 +126,7 @@ The four Whisper tests are skipped if the `tiny` model isn't downloaded (`bayn m
 | `test_gesture_event_saved_and_downloadable` | Bridge + events + dashboard processes: a clench injected through the REST API fires an `event` in the browser stream < 2.5 s later (1 s hold included); `event_done` arrives with exactly the configured window (−2/+3 s in the test); the CSV downloads over HTTP; `/api/events` lists it. |
 | `test_manual_trigger_and_hotkey` | `POST /api/events/trigger {source: hotkey}` → a `manual` event with source `hotkey` reaches the browser. |
 | `test_guided_calibration_with_simulator` | `POST /api/events/calibration` → prompts stream to the browser; the simulator performs each prompted clench; calibration ends `done` with quality `good`. |
-| `test_live_transcript_and_event_transcript` | All 5 processes. The English test clip plays in a loop as the "microphone", with the tiny model on CPU. A transcript segment reaches the browser (`en`, contains "time", unix timestamps, latency < 5 s). A manual event fired during speech gets `transcript_window` with ≥ 1 segment. `transcript.txt` downloads. The event row in `/api/events` records the transcript. Status reports model/device and `audio_ok`. |
+| `test_live_transcript_and_event_transcript` | All 6 processes (summarizer against a fake Ollama). The English test clip plays in a loop as the "microphone", with the tiny model on CPU. A transcript segment reaches the browser (`en`, contains "time", unix timestamps, latency < 5 s). A manual event fired during speech gets `transcript_window` with ≥ 1 segment. `transcript.txt` downloads. The event row in `/api/events` records the transcript. Status reports model/device and `audio_ok`. **Then the summary**: the prompt carries the transcript, text streams while writing, the final markdown has the summary and the code-written EEG section, and `summary.md` downloads. |
 | `test_bad_gesture_rejected` | The REST API rejects an invalid gesture with HTTP 400. |
 
 ### 2.4 Hardware-in-the-loop tests (2)
@@ -240,17 +246,46 @@ Scores are computed by `bayn.transcription.metrics` (normalised: diacritics, ham
 **Strategy evaluation tool** (`bayn eval-stt`, same audio, every strategy). Check on the TTS demo clip (sentence-level switching, GPU): every strategy scores 4.9 % WER (mostly "10.15" vs "ten fifteen"); the prompt gives CER 3.1 % vs 3.9 %. No regression. The full comparison on real recordings is in "Later: transcription benchmark" below.
 | Offline | System | no network after setup | ✅ by design: models load from a local folder with `local_files_only`, HF telemetry off · network-unplugged run in Phase 8 |
 
-### Phase 5: Ollama summaries (planned)
+### Phase 5: Ollama summaries ✅ (dev PC, GPU) · ✅ user test (live mic + dashboard, 2026-11-09: "very satisfactory")
 
-Realistic test material: the **classroom scenario** in [tests/data/scenarios/classroom.json](../tests/data/scenarios/classroom.json). It has three real live transcripts (English, Arabic, mixed) with their true scripts, *including* recognition errors and unrelated chatter before the reading. A good summary has to cope with both.
+**Goal:** when an event's window closes, a small local LLM summarises the transcript of the window. The dashboard shows how the captured text turns into the summary, in English and/or Arabic, without inventing content.
 
-| Planned activity | Level | Acceptance criterion |
-|---|---|---|
-| Classroom scenario × 3 languages: summary vs the true script | Manual + scripted checks | covers the key facts (cup by the window, water level fell, sun → vapor = evaporation, question about cooling vapor); invents nothing; ignores the pre-reading chatter; doesn't repeat transcription errors as facts |
-| Prompt builder: transcript window + EEG stats, en / ar / both | Unit | stable prompt structure, window boundaries correct |
-| Ollama unavailable / model missing | Integration | clear error in the UI, pipeline keeps running |
-| Scripted scenarios: summary covers the facts in the transcript and invents none | Manual | reviewed on ≥ 5 scenarios in English and Arabic |
-| Event → summary streamed into the UI | System | first tokens < 5 s after the event window closes (GPU) |
+**Test material:** the **classroom scenario** ([tests/data/scenarios/classroom.json](../tests/data/scenarios/classroom.json)): three real live transcripts (English, Arabic, mixed) *including* recognition errors and unrelated chatter before the reading. Automatic checks per summary (`bayn eval-summary`):
+- **facts:** key facts present, counting only facts the live transcript actually contains
+- **invented:** recognition errors stated as facts ("happy water" from "فرحت"), the unrelated chatter, medical words, **meaning flips** ("water level rose")
+- **language:** written in the requested language
+- **format:** all sections present
+
+**Model comparison** (RTX 2080 Ti; 3 transcripts × English/Arabic output × 2 runs = 12 summaries per model):
+
+| Model, prompt | Facts (en / ar) | Invented | Right language | Pass | Avg time |
+|---|---|---|---|---|---|
+| qwen2.5:3b, English-only prompt (first probe) | – | "happy water", invented "make a noise"; **Arabic requested → English written** | ❌ | – | 2 s (first load 64 s) |
+| qwen2.5:3b, localised markdown prompt | 80 % / 56 % | 0/12 | 12/12 | 3/12 | 2.6 s |
+| **qwen2.5:7b, localised markdown prompt** | 88 % / 64 % | 0/12 | 12/12 | 5/12 | 3.9 s |
+| llama3.2:3b, localised markdown prompt | 70 % / 68 % | **4/12** ("Black Clover", "فرح") | 10/12 | 0/12 | 26.6 s (repetition loops) |
+| qwen2.5:3b, **structured JSON** | 65 % / 35 % | 1/12 | 12/12 | 2/12 | 1.4 s |
+| **qwen2.5:7b, structured JSON (chosen)** | **96 % / 68 %** | **0/12** | **12/12** | **8/12** | 3.3 s |
+
+**Decisions:**
+- **Structured output.** Ollama forces the answer into `{summary, key_points ≤ 4, unclear}` and code renders localised headings. This fixed the Arabic format (the model skipped sections) and stopped "line-by-line translation instead of summarising". It also caught a **meaning flip**: one free-text Arabic summary turned "the water level went down" into "ارتفع مستوى الماء" ("rose").
+- **`model: auto`.** qwen2.5:7b with an NVIDIA GPU ≥ 10 GB (or Apple Silicon ≥ 16 GB), else qwen2.5:3b. The 3b model is weaker but is the only practical choice on CPU or 8 GB GPUs, where 7b plus Whisper won't fit (D17).
+- **The EEG section is written by code** from the measured statistics, labelled "signal description, not a medical assessment". The LLM never sees EEG numbers, so it can't invent medical interpretations.
+
+**End to end** (`bayn demo --audio file`, real Whisper large-v3-turbo + qwen2.5:7b on GPU). The scripted clench fired an event, and its window (10 segments, ar + en) was summarised **2.4 s after the window closed**. The first text appeared after 0.5 s, with 21 live updates at 58 tokens/s. The English summary merges Arabic and English speech correctly but adds one small embellishment ("or dropping of his head", not in the transcript; F3).
+
+| Activity | Level | Acceptance criterion | Result |
+|---|---|---|---|
+| Prompts: language detection, rules, JSON example (unrelated topic), relative times, Arabic prompt in Arabic, schema caps key points | Unit | structure as designed | ✅ |
+| Rendering: localised headings, **partial JSON rendered while streaming**, EEG section by code, disclaimer | Unit | correct for en/ar | ✅ |
+| Quality checks: facts, flips, wrong language, facts limited to what the transcript contains | Unit | catches each failure type | ✅ |
+| `auto` model choice: 11 GB → 7b, 8 GB → 3b, CPU → 3b, fall back to what's pulled | Unit | as designed | ✅ |
+| Ollama client against a fake server: streaming, JSON schema sent, error lines, unreachable server, **stalled model times out** | Integration | errors surface as `OllamaError` | ✅ |
+| Service: both languages streamed and saved (`summary.md/json`), event row updated, no-speech without an LLM call, LLM failure reported after one retry | Integration | as designed | ✅ |
+| Real model (Ollama running): English classroom scenario | Integration | ≥ 60 % facts, nothing invented, right language and format | ✅ (qwen2.5:7b) |
+| Speech → transcript → event → **summary streamed to the browser**, prompt visible, `summary.md` downloadable | System | all processes, fake Ollama for determinism | ✅ |
+| Event → summary on real models | System (manual run) | first text < 5 s after the window closes | ✅ 0.5 s (total 2.4 s) |
+| Dashboard: ① heard → ② context (EEG + prompt) → ③ summary writing live, EN/AR tabs, regenerate | Manual | readable, understandable | ⏳ user |
 
 ### Phase 6: Gesture tuning on the real headset + ML blink detector (planned)
 
@@ -287,6 +322,8 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 |---|---|
 | `bayn setup` on a clean machine (Windows; one of macOS/Linux) | deps, CUDA libs (if NVIDIA), Whisper + Ollama models, `doctor` all green, no manual steps |
 | Offline-readiness check | everything needed for the demo is on disk; network-unplugged demo works |
+| **Laptop disk budget** | all models in `models/` (copyable), nothing large on C:, `doctor` reports sizes + free space (✅ done early, 2026-11-09) |
+| Ollama without the tray app | `bayn run` starts `ollama serve` itself with the user's model folder (✅ done early) |
 | Laptop checklist (Bluetooth, mic, GPU/CPU, ports, models) | `doctor` covers each item |
 | README quickstart followed literally | works without undocumented steps |
 
@@ -304,9 +341,10 @@ Goal: compare **all models and strategies on identical audio** to understand the
 
 | Planned activity | Acceptance criterion / output |
 |---|---|
-| New, more realistic **classroom scripts** from the user: mostly Arabic (MSA + Hejazi) with occasional English key terms ("pie", "Rutherford"…), plus English-only and Arabic-only | scripts + references stored like `classroom.json` |
-| Record each script once to WAV (`bayn record`), so every model hears **exactly the same audio** | recordings kept locally in `data/recordings/` (never committed) |
-| Run `bayn eval-stt` for every model (tiny, base, small, medium, large-v3, large-v3-turbo) × device (GPU / CPU) × strategy (`per_utterance`, `arabic_lean`, prompt, free detection) | table of WER, CER, latency per utterance, real-time factor |
+| **Recording corpus** ✅ [docs/CORPUS.md](CORPUS.md) (source `tests/data/corpus.json`): 4 topics (atom/Rutherford, circles/pi, photosynthesis, classroom incident) × English / Arabic / mixed (Arabic with English key terms), 12 scripts × ~35 s, each with key terms and summary facts; self-consistency tests in `test_corpus.py`. The user may add more scripts | ✅ ready to record |
+| Record each script once to WAV (`bayn record <id>`, shows the script, Enter stops, warns if too quiet/clipping), so every model hears **exactly the same audio** | recordings kept locally in `data/recordings/` (never committed) · ⏳ user |
+| `bayn eval-stt --corpus all --models tiny small large-v3-turbo [--device cpu]`: every model × device × strategy (`per_utterance`, `arabic_lean`, prompt, forced language) | table of WER, CER, key-term recall, real-time factor per language version · tool ✅, run ⏳ |
+| Summaries of the corpus transcripts (especially `*-incident`: observations reported, **no diagnosis**) | facts + forbidden checks from `corpus.json` · ⏳ |
 | **Key-term recall**: share of English key terms in Arabic speech that come out correctly (Latin script, right spelling) | the main metric for code-switching; target ≥ 90 % for the chosen default |
 | Pick defaults per machine class (GPU laptop / CPU-only laptop) from the numbers | defaults + limitations documented in README |
 
@@ -340,9 +378,11 @@ Goal: compare **all models and strategies on identical audio** to understand the
 | English, Arabic and both mixed | language-choice unit test, model integration tests, demo benchmark (14/14 switches) | ✅ |
 | Whisper on CPU, GPU when available | benchmark on CUDA and CPU, `doctor` | ✅ |
 | Transcript around the event | `test_live_transcript_and_event_transcript`, demo run | ✅ |
-| Local LLM summaries | Phase 5 plan | ⏳ |
+| Local LLM summary of the transcript around the event + basic EEG stats | summarization unit/integration tests, system test, real-model test, demo run | ✅ (EEG part written by code) |
+| Show the captured text and how it turns into the summary | dashboard ① heard → ② context + prompt → ③ live summary; system test checks prompt + streaming | ✅ · ⏳ user |
+| Arabic, English, and both | `summary.language` auto/en/ar/both; model comparison per output language | ✅ (Arabic weaker, F3) |
 | Easy setup on other machines (Docker dropped → native setup) | Phase 7 plan | ⏳ |
-| One-command demo without hardware | system tests (5 processes), `bayn demo --audio file` run | ✅ (summary in Phase 5) |
+| One-command demo without hardware | system tests (6 processes), `bayn demo --audio file` run with real models | ✅ |
 
 ---
 
@@ -363,6 +403,9 @@ Goal: compare **all models and strategies on identical audio** to understand the
 | D11 | Manual run | Demo mode's scripted double blinks never fired an event | Demo alternates clench / double blink, but the default trigger gesture is clench only | Demo mode listens to both gestures | demo run |
 | D12 | Integration (benchmark) | `TypeError: 'int' object is not callable` in the segmenter | Attribute `self.step` (sample count) shadowed the method `step()` | Renamed to `step_n` | all segmenter tests |
 | D13 | Manual run | Sample-audio script failed to parse; Arabic text garbled | Windows PowerShell 5.1 reads UTF-8 `.ps1` files without BOM as ANSI | Arabic sentences moved to a UTF-8 JSON data file read with `-Encoding UTF8`; scripts kept ASCII | sample-audio run |
+| D16 | Summary evaluation (test bug) | Every Arabic summary failed "format"; Arabic and mixed could never reach full fact coverage | Heading written "الرييسيه" vs normalised "الرئيسيه"; facts required that the live transcript had lost (cut-off ending, "shubak") | Correct heading; facts carry an `in:` list of variants whose transcript contains them; `--rescore` re-checks saved summaries | `test_quality_check_*`, `test_facts_only_required_where_the_transcript_has_them` |
+| D17 | Manual demo run | Summary started but never finished; the next event's summary waited behind it | Three LLMs left loaded by model comparisons (9.6 GB) + Whisper oversubscribed the 11 GB GPU; no stall timeout | 60 s token-stall timeout → error shown, queue continues; evaluation unloads its models; `auto` needs ≥ 10 GB VRAM for 7b | `test_stalled_model_times_out_instead_of_hanging`, `test_auto_model_depends_on_gpu_memory` |
+| D18 | Integration | Live summary text could stay blank until the end with a fast model | The first streamed update (no summary text yet) used up the 80 ms throttle | Empty renders don't count against the throttle | `test_service_summarises_window_streams_and_saves` |
 | D15 | Live mic (user) | Event transcript lost the end of the last sentence ("يبرد فوق في السما") | A pause > 0.6 s just before +30 s split the sentence; the second half started after the window end | Window transcript includes speech continuing with < 1.5 s pause, up to `event_tail_s` (4 s) | `test_event_transcript_finishes_the_sentence_in_progress` |
 | D14 | Unit (test bug) | Timestamp continuity check failed for the file source | 1e-9 s tolerance is below double precision at unix ~1.8e9 s (~2e-7 s) | 1e-6 s tolerance | `test_stitch_and_file_source` |
 
@@ -370,6 +413,7 @@ Goal: compare **all models and strategies on identical audio** to understand the
 
 | ID | Found by | Finding | Likely cause | Plan |
 |---|---|---|---|---|
+| F3 | Summary evaluation 2026-11-09 | Summaries are faithful but imperfect: Arabic output covers fewer facts (68 % vs 96 % English with qwen2.5:7b) because it is more abstract, not wrong. Small embellishments happen ("or dropping of his head"). The "Unclear" list is almost never used, even when the transcript has obvious recognition errors. qwen2.5:3b (CPU / small GPUs) covers only ~50 % | Small local models; noisy transcripts | Accepted for the prototype. More scenarios (user's new scripts) and a larger model where hardware allows. Always shown with "automatic transcript, may contain errors" |
 | F2 | Live mic, user test 2026-11-09 | Mixed Arabic/English **inside** a sentence: 39.7 % WER. English-decoded utterances **translate or transliterate the Arabic** ("فاكرين إيش صار لها" → "Do you think what happened?", شباب → "shabab"); Arabic-decoded ones mostly keep the English words | `mixed` forces one language per utterance; Whisper handles intra-sentence code-switching poorly when forced to English | **Current limitation, accepted for now.** The test script was very informal and heavily mixed. The realistic case is Arabic speech with **occasional English key terms** (e.g. "pie", "Rutherford"), which **must not be lost**. To be measured in the transcription benchmark (§4, "Later"). Candidate fixes are already in the code but off by default: `mixed_strategy: arabic_lean`, `initial_prompt: auto` |
 | F1 | Hardware, user test 2026-11-09 | Rule-based double blink: head movements cause false triggers; natural-strength double blinks are missed | Movement artefacts and blinks overlap in amplitude on AF7/AF8; calibration "rest" includes natural blinks, which pushes the threshold up | Phase 6: ML detector (EEG only and EEG + accelerometer), evaluated against the rule on labelled real data. Until then, **jaw clench** is the recommended trigger |
 
@@ -379,6 +423,8 @@ Goal: compare **all models and strategies on identical audio** to understand the
 |---|---|---|
 | E1 | Dev PC's built-in Bluetooth (QCA61x4A Wi-Fi/BT card, no antennas attached) saw 1 BLE device and no Muse | USB Bluetooth dongle |
 | E2 | Dongle (Actions ATS2851) showed Device Manager Code 31 on Windows 10 | Vendor driver; built-in adapter disabled (only one active radio). Documented in the README |
+| E4 | Dev PC's C: drive down to 5.2 GB free: Ollama models (8 GB) + pip cache (1.5 GB) on C: | Ollama models moved to `models/ollama` (`OLLAMA_MODELS`), pip cache cleared, rejected llama3.2:3b deleted → 14.7 GB free. Setup now does this by default; `doctor` checks disk space |
+| E5 | Ollama tray app stopped starting its server after the move (server log empty) | `bayn run` / `bayn models` start `ollama serve` themselves; Ollama 0.40 had cloud features on by default → `OLLAMA_NO_CLOUD=1` |
 | E3 | Muse powers itself off when idle and unconnected, so a test run 25 min later found nothing | Turn it on right before testing; `doctor` shows whether it is advertising |
 
 ---
