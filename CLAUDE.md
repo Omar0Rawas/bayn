@@ -5,8 +5,10 @@ Prototype, NOT a medical device. Current status and next steps: docs/PROGRESS.md
 
 ## END GOAL: it must run fine on the demo LAPTOP (user, 2026-11-09)
 Check every change against the laptop, not just the dev PC:
-- CPU-only path works (Whisper small, qwen2.5:3b) and stays real-time; nothing assumes CUDA.
-- GPU memory budget: Whisper turbo (~2.5 GB) + LLM must fit together (7b only with >= 10 GB VRAM).
+- CPU-only path works (Whisper small, gemma4:e2b / qwen3:4b) and stays real-time; nothing assumes CUDA.
+- GPU memory budget: Whisper turbo (~2.3 GB) + LLM must fit together (gemma4:e2b measured 3.0 GB VRAM).
+- The model benchmark (docs/BENCHMARK.md) ran on the dev PC; the **demo configuration is re-tested on the laptop**
+  with its own mic (`bayn benchmark ... --profiles cpu`, see docs/PROGRESS.md) before the hackathon.
 - **Disk space**: laptops often have a small C: drive. All models live in the repo's models/ folder
   (models/whisper, models/ollama via OLLAMA_MODELS) and can be copied to the laptop; `doctor` shows sizes + free space.
 - Setup from scratch with one command; offline after setup; `doctor` must flag anything missing.
@@ -32,9 +34,12 @@ Check every change against the laptop, not just the dev PC:
   restarted if they die and the transcriber has a degraded mode (no model → error status, rest keeps running).
 - Summarizer (5580 pub / 5581 cmd): Ollama at 127.0.0.1:11434 (installed on dev PC at
   %LOCALAPPDATA%\Programs\Ollama). Structured output (JSON schema) rendered by code; EEG section written by code,
-  never by the LLM. model auto = qwen2.5:7b if NVIDIA >= 10 GB else 3b. Unload models you load for experiments
-  (keep_alive 0) — parked models + Whisper stalled the GPU once (D17). Measure prompt/model changes with
-  `bayn eval-summary` (classroom scenarios), never by eye alone.
+  never by the LLM. model auto = gemma4:e2b if NVIDIA >= 6 GB / Apple Silicon / RAM >= 12 GB, else qwen3:4b
+  (chosen by `bayn benchmark`; old qwen2.5 7b/3b scored lower). `think: false` is sent (reasoning models).
+  Unload models you load for experiments (keep_alive 0) — parked models + Whisper stalled the GPU once (D17).
+  Measure prompt/model changes with `bayn benchmark` (corpus recordings) or `bayn eval-summary`, never by eye.
+  Never call the `ollama` CLI (it launches the tray app, E6): use `local_server()` from ollama_client.
+  Ollama's /api/ps under-reports Gemma 4 memory: measure from outside (`bayn benchmark mem`).
 - **No Docker** (dropped by the user): Bluetooth, mic and GPU all need native processes.
 - Whisper: models/whisper/<name>/ loaded with local_files_only; downloaded only by `bayn models`. auto = large-v3-turbo
   on CUDA (float16, beam 5, live partials), small on CPU (int8, beam 1). CUDA DLLs from pip nvidia-* wheels are added
@@ -51,11 +56,13 @@ Check every change against the laptop, not just the dev PC:
 - muselsl needs bitstring<5.
 
 ## Commands (Windows)
-- `.\bayn setup | demo | run | check | models | mics | corpus | record | eval-stt | eval-summary | sample-audio | test | doctor`
+- `.\bayn setup | demo | run | check | models | mics | corpus | record | eval-stt | eval-summary | benchmark | sample-audio | test | doctor`
   (`--audio file` = no mic)
 - Recording corpus: tests/data/corpus.json (source) → docs/CORPUS.md (`python -m bayn.corpus render`; a test fails if
-  stale). 4 topics × en / ar / mixed (Arabic + English key terms). `bayn record <id>`, `bayn eval-stt --corpus all
-  --models ... --device cpu` = the planned model benchmark. Recordings in data/recordings (never committed). (bayn.cmd wraps scripts/bayn.ps1 with ExecutionPolicy Bypass,
+  stale). 4 topics × en / ar / mixed (Arabic + English key terms). `bayn record <id>` (opens an RTL reading page;
+  terminals can't render Arabic). `bayn benchmark stt|llm|mem|report` = Whisper × LLM benchmark, profiles gpu /
+  laptop (4 CPU threads) / cpu (all cores), cached in data/eval/bench, report → docs/BENCHMARK.md. Metrics treat
+  numbers in words = digits; key terms accept `a|b` spellings. Recordings in data/recordings (never committed). (bayn.cmd wraps scripts/bayn.ps1 with ExecutionPolicy Bypass,
   because Windows blocks .ps1 scripts by default)
 - Tests: `.\.venv\Scripts\python.exe -m pytest` (no hardware needed); levels via `-m unit|integration|system`;
   real headset: `$env:BAYN_HARDWARE=1; ... -m hardware -v -s`.

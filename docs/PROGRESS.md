@@ -5,7 +5,8 @@
 2. Connect the real Muse 2 (BrainFlow `MUSE_2_BOARD`, muse-lsl fallback) — becomes the default source
 3. Gesture trigger + events (`Detector` interface, clench / double blink, calibration, cooldown, EEG window −10 s/+30 s, manual button + hotkey)
 4. Whisper live transcription (faster-whisper, live mic, en / ar / mixed)
-5. Ollama summaries (qwen2.5:3b default), transcript → summary view in the UI
+5. Ollama summaries, transcript → summary view in the UI
+   (+ model benchmark 2026-11-10: default summary model gemma4:e2b / qwen3:4b, re-test on the demo laptop)
 6. Tune gesture triggering on the real headset + guided onboarding (user request, "fun" feature): Muse-app-style
    walkthrough ("blink twice", "clench your jaw", "close your eyes and watch alpha rise") that doubles as calibration
    + **ML double-blink detector** (user request after the Phase 3 headset test): the guided onboarding records
@@ -155,4 +156,31 @@ Follow-up (user requests, 2026-11-09):
 
 User test: live mic capture + summaries in the dashboard confirmed working well. Phase 5 committed.
 
-Next: corpus benchmark (`bayn eval-stt --corpus all --models ...`, GPU and `--device cpu` for the laptop), then Phase 6.
+## Model benchmark (unplanned phase between 5 and 6, user request 2026-11-10) ✅ dev PC · ⏳ demo laptop
+Goal: the strongest Whisper × LLM combination for English / Arabic / mixed, and proof it still works with minimal
+resources. Details: docs/TESTING.md ("Model benchmark"), full tables: docs/BENCHMARK.md.
+Built:
+- `bayn benchmark stt | llm | mem | report` (src/bayn/benchmark.py): every Whisper model on the user's 12 corpus
+  recordings, every LLM on perfect and real transcripts, CPU-only speed, measured GPU/RAM, per-machine
+  recommendation. Profiles: `gpu`, `laptop` (CPU, 4 threads: emulated minimal laptop), `cpu` (all cores: for the
+  real laptop). Cached + resumable in data/eval/bench (gitignored); scores recomputed from saved text.
+- Fair scoring: numbers in words = digits (en + ar), alternative spellings for key terms, transliterated English
+  terms accepted in Arabic summaries, language check ignores the quoted "Unclear" fragments (D19–D22).
+- `transcription.cpu_threads` setting; Ollama client: per-call options (CPU only), `think: false` for reasoning
+  models, `local_server()` used by every tool (never the `ollama` CLI: it launches the tray app, E6).
+Results (dev PC): Whisper defaults confirmed (turbo on GPU; small is the only accurate model that keeps up live on
+4 CPU threads, RTF 0.36). Summary model changed: **gemma4:e2b** (81 % facts on real turbo transcripts, 82 % on mixed
+speech, 3.0 GB VRAM, 8 s per summary on 4 CPU threads / 4.7 GB RAM) when NVIDIA ≥ 6 GB or RAM ≥ 12 GB, else
+**qwen3:4b** (3.1 GB RAM). Old defaults qwen2.5:7b / 3b scored 68 % / 44–52 %. Mixed speech: Whisper writes English
+key terms in Arabic letters (F4); Gemma 4 still understands them.
+Disk: models/ now holds every candidate (Ollama 33 GB, Whisper 6.5 GB) on H:. Copy only what the laptop needs
+(`bayn models` there pulls just the auto choice); unused candidates can be deleted after the laptop retest.
+
+**Re-test on the demo laptop** (user, 2026-11-10): the best demo configuration is decided there, with the laptop's
+own (mini) microphone: record the corpus again, then
+`bayn benchmark stt --models tiny base small medium large-v3-turbo --profiles cpu` (+ `gpu` if NVIDIA),
+`bayn benchmark llm --profile cpu --sources all --models gemma4:e2b qwen3:4b`, `bayn benchmark mem --profiles cpu ...`,
+`bayn benchmark report`. The user will ask for a prompt for the Claude Code session on the laptop.
+
+Next (user's order, 2026-11-10): Phase 6 blink detection (ML double blink) → if all good, move to the laptop
+(setup + retests) → clean up the repo and make it presentable.

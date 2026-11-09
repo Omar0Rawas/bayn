@@ -18,10 +18,10 @@
        "en": [["cool", "cold", "chill"]], "ar": [["يبرد", "برد", "تبريد", "بروده"]]}
     ],
     "forbidden": {
-      "_about": "includes meaning flips: the water level went DOWN, so 'rose' is an invented (opposite) fact",
-      "en": ["happy", "noise", "black clover", "seizure", "diagnos", "epilep", "level rose", "level increased",
+      "_about": "includes meaning flips: the water level went DOWN, so 'rose' is an invented (opposite) fact. Talk before the reading (Black Clover) is NOT forbidden: it was the user's own aside while testing, not representative classroom chatter, and handling chatter is not a demo goal (user, 2026-11-10)",
+      "en": ["happy", "noise", "seizure", "diagnos", "epilep", "level rose", "level increased",
              "level went up", "level had risen"],
-      "ar": ["سعيد", "فرح", "ضجيج", "بلاك", "نوبه", "تشخيص", "صرع", "ارتفع مستوى", "ارتفاع مستوى",
+      "ar": ["سعيد", "فرح", "ضجيج", "نوبه", "تشخيص", "صرع", "ارتفع مستوى", "ارتفاع مستوى",
              "الماء ارتفع", "زاد مستوى"]
     }
   },

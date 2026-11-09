@@ -131,8 +131,9 @@ class WhisperEngine:
             raise FileNotFoundError(f"model '{name}' not downloaded - run: python -m bayn.transcription.models")
         compute = self.cfg.compute_type if self.cfg.compute_type != "auto" else ("float16" if device == "cuda" else "int8")
         t = time.perf_counter()
+        threads = self.cfg.cpu_threads if self.cfg.cpu_threads != "auto" else max(1, (os.cpu_count() or 4) - 2)
         model = WhisperModel(str(path), device=device, compute_type=compute,
-                             cpu_threads=max(1, (os.cpu_count() or 4) - 2), local_files_only=True)
+                             cpu_threads=threads, local_files_only=True)
         # warm-up: CUDA/cuDNN problems often only appear on the first inference
         list(model.transcribe(np.zeros(16000, dtype=np.float32), language="en", beam_size=1)[0])
         self.model, self.device, self.model_name, self.compute_type = model, device, name, compute

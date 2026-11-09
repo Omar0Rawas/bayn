@@ -92,7 +92,8 @@ transcription:
   english_confidence: 0.9  # arabic_lean: P(en) needed to decode as English
   initial_prompt: none     # none | auto (code-switched Hejazi/English style hint) | any custom text
   beam_size: auto          # auto = 5 on GPU, 1 on CPU (faster)
-  vad_threshold: 0.5       # Silero speech probability
+  cpu_threads: auto        # CPU threads for Whisper: auto = all but 2 (leaves room for EEG + dashboard)
+  vad_threshold: 0.5      # Silero speech probability
   min_silence_s: 0.6       # pause that ends an utterance
   max_utterance_s: 15      # force a cut in long monologues
   partials: auto           # live in-progress text: auto = only on GPU | true | false
@@ -101,8 +102,8 @@ transcription:
   event_tail_s: 4          # finish a sentence that runs past the window end (up to this long)
 
 summary:
-  model: auto              # auto = qwen2.5:7b with an NVIDIA GPU >= 10 GB (or Apple Silicon >= 16 GB),
-                           # else qwen2.5:3b. Or any Ollama model; compare with `bayn eval-summary`
+  model: auto              # auto = gemma4:e2b with an NVIDIA GPU >= 6 GB, Apple Silicon or >= 12 GB RAM,
+                           # else qwen3:4b (docs/BENCHMARK.md). Or any Ollama model; compare with `bayn benchmark`
   host: http://127.0.0.1:11434   # local Ollama server (never a cloud endpoint)
   language: auto           # auto = main language of the transcript | en | ar | both
   temperature: 0.2

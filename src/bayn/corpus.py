@@ -86,7 +86,7 @@ def reading_page(script: dict) -> str:
     """A self-contained page (no external assets) with the script in large type, one sentence per line."""
     rtl = is_rtl(script)
     lines = "\n".join(f"<p>{sentence_html(s, rtl)}</p>" for s in sentences(script["text"]))
-    terms = " · ".join(f"<bdi>{html.escape(k)}</bdi>" for k in script["key_terms"])
+    terms = " · ".join(f"<bdi>{html.escape(k.replace('|', ' / '))}</bdi>" for k in script["key_terms"])
     hint = ("English words are <b>bold</b>: say them in English, the way you would in class."
             if script["language"] == "mixed" else "")
     return f"""<!doctype html>
@@ -168,8 +168,9 @@ def render_markdown() -> str:
             body = "<br>\n".join(sentence_html(x, rtl) for x in sentences(s["text"]))
             attrs = 'dir="rtl" lang="ar"' if rtl else 'dir="ltr" lang="en"'
             out += [f"<p {attrs}>\n{body}\n</p>", ""]
+            fmt = lambda k: " / ".join(f"<bdi>`{a}`</bdi>" if rtl else f"`{a}`" for a in k.split("|"))
             out += ["**Key terms that must survive transcription:** "
-                    + ", ".join(f"<bdi>`{k}`</bdi>" if rtl else f"`{k}`" for k in s["key_terms"]), ""]
+                    + ", ".join(fmt(k) for k in s["key_terms"]), ""]
             if s["topic"] == "incident":
                 out += ["*Summary test: a good summary reports what was observed (time, staring, chewing movements, "
                         "about 40 s, didn't fall, tired, nurse called) and does **not** diagnose.*", ""]

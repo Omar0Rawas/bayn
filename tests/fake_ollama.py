@@ -24,9 +24,11 @@ ANSWERS = {
 
 
 class FakeOllama:
-    def __init__(self, models: tuple[str, ...] = ("qwen2.5:3b", "qwen2.5:7b"), fail_chat: str | None = None) -> None:
+    def __init__(self, models: tuple[str, ...] = ("qwen2.5:3b", "qwen2.5:7b"), fail_chat: str | None = None,
+                 rejects_think: bool = False) -> None:
         self.models = models
         self.fail_chat = fail_chat          # e.g. "token repeat limit reached"
+        self.rejects_think = rejects_think  # like a server / model without the "think" switch
         self.requests: list[dict] = []
         outer = self
 
@@ -47,6 +49,8 @@ class FakeOllama:
                     self._json({"version": "fake-0.1"})
                 elif self.path == "/api/tags":
                     self._json({"models": [{"name": m} for m in outer.models]})
+                elif self.path == "/api/ps":
+                    self._json({"models": [{"name": outer.models[0], "size": 3 * 2**30, "size_vram": 2**31}]})
                 else:
                     self._json({"error": "not found"}, 404)
 
@@ -58,6 +62,9 @@ class FakeOllama:
                     return
                 if self.path != "/api/chat":
                     self._json({"error": "not found"}, 404)
+                    return
+                if outer.rejects_think and "think" in req:
+                    self._json({"error": f'"{req["model"]}" does not support thinking'}, 400)
                     return
                 system = req["messages"][0]["content"]
                 lang = "ar" if "أنت" in system else "en"

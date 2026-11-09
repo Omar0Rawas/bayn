@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 import httpx
 
@@ -55,6 +57,32 @@ def ollama_serve_command(host: str) -> list[str] | None:
     return [exe, "serve"] if exe else None
 
 
+@contextmanager
+def local_server(host: str) -> Iterator[bool]:
+    """Make sure a local Ollama server runs for the duration (start `ollama serve` if needed, stop it after).
+
+    Use this rather than the `ollama` CLI: on Windows `ollama list` without a server starts the tray app,
+    which ignores OLLAMA_MODELS from stale environments and can't always start its own server (E4)."""
+    proc = None
+    if cmd := ollama_serve_command(host):
+        proc = subprocess.Popen(cmd, env={**os.environ, **ollama_env()}, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        for _ in range(60):
+            if OllamaClient(host).version():
+                break
+            time.sleep(0.5)
+    try:
+        yield OllamaClient(host).version() is not None
+    finally:
+        if proc:
+            proc.terminate()
+            try:
+                proc.wait(10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+
 @dataclass
 class ChatResult:
     text: str
@@ -88,11 +116,20 @@ class OllamaClient:
         names = self.models()
         return model in names or f"{model}:latest" in names
 
-    def warm(self, model: str, keep_alive: str = "60m") -> float:
+    def loaded(self) -> list[dict]:
+        """Models in memory now (/api/ps): name, size (bytes), size_vram (bytes on the GPU)."""
+        try:
+            return httpx.get(f"{self.host}/api/ps", timeout=5).json().get("models", [])
+        except (httpx.HTTPError, ValueError):
+            return []
+
+    def warm(self, model: str, keep_alive: str = "60m", options: dict | None = None) -> float:
         """Load the model into (GPU) memory now, so the first real summary starts instantly."""
         t = time.perf_counter()
-        r = httpx.post(f"{self.host}/api/generate", json={"model": model, "prompt": "", "keep_alive": keep_alive},
-                       timeout=self.timeout)
+        body = {"model": model, "prompt": "", "keep_alive": keep_alive}
+        if options:
+            body["options"] = options
+        r = httpx.post(f"{self.host}/api/generate", json=body, timeout=self.timeout)
         if r.status_code != 200:
             raise OllamaError(f"could not load {model}: {r.text[:200]}")
         return time.perf_counter() - t
@@ -106,15 +143,27 @@ class OllamaClient:
 
     def chat(self, model: str, messages: list[dict], temperature: float = 0.2, keep_alive: str = "60m",
              on_token: Callable[[str], None] | None = None, num_ctx: int = 4096,
-             json_schema: dict | None = None) -> ChatResult:
+             json_schema: dict | None = None, options: dict | None = None) -> ChatResult:
         """Streamed chat completion; on_token receives each piece of text as it arrives.
-        json_schema: force the answer into this JSON shape (Ollama structured outputs)."""
-        t0 = time.perf_counter()
-        first, parts, stats = None, [], {}
-        body = {"model": model, "messages": messages, "stream": True, "keep_alive": keep_alive,
-                "options": {"temperature": temperature, "num_ctx": num_ctx, "repeat_penalty": 1.15}}
+        json_schema: force the answer into this JSON shape (Ollama structured outputs).
+        options: extra Ollama options, e.g. {"num_gpu": 0, "num_thread": 4} = CPU only.
+        Reasoning ("thinking") models are asked not to think: a summary doesn't need it and it is slow."""
+        body = {"model": model, "messages": messages, "stream": True, "keep_alive": keep_alive, "think": False,
+                "options": {"temperature": temperature, "num_ctx": num_ctx, "repeat_penalty": 1.15,
+                            **(options or {})}}
         if json_schema:
             body["format"] = json_schema
+        try:
+            return self._chat(body, on_token)
+        except OllamaError as e:
+            if "think" not in str(e).lower():
+                raise
+            body.pop("think")                              # model/server without the thinking switch
+            return self._chat(body, on_token)
+
+    def _chat(self, body: dict, on_token: Callable[[str], None] | None) -> ChatResult:
+        t0 = time.perf_counter()
+        first, parts, stats = None, [], {}
         try:
             with httpx.stream("POST", f"{self.host}/api/chat", json=body, timeout=self.stream_timeout) as r:
                 if r.status_code != 200:

@@ -17,7 +17,7 @@ import time
 
 from bayn.common.config import DATA_DIR, ROOT, load_config
 from bayn.summarization.models import resolve_model
-from bayn.summarization.ollama_client import OllamaClient, OllamaError
+from bayn.summarization.ollama_client import OllamaClient, OllamaError, local_server
 from bayn.summarization.prompts import build_messages, render, schema
 from bayn.summarization.quality import check_summary
 
@@ -72,11 +72,16 @@ def main(argv: list[str] | None = None) -> int:
                 r["quality"] = check_summary(r["summary"], r["lang"], checks, r["variant"]).to_dict()
         _print_table(results)
         return 0
+    with local_server(cfg.summary.host) as ok:         # starts `ollama serve` for the run if needed
+        if not ok:
+            print(f"Ollama is not available at {cfg.summary.host}. Install it (bayn setup), then retry.")
+            return 1
+        return _evaluate(args, cfg, data, checks)
+
+
+def _evaluate(args, cfg, data: dict, checks: dict) -> int:
     client = OllamaClient(cfg.summary.host, cfg.summary.timeout_s)
-    if client.version() is None:
-        print(f"Ollama is not running at {cfg.summary.host}. Start the Ollama app, then retry.")
-        return 1
-    event = {"t": 1_800_000_000.0, "detector": "manual", "source": "button", "label": "Manual trigger",
+    event ={"t": 1_800_000_000.0, "detector": "manual", "source": "button", "label": "Manual trigger",
              "pre_s": 10, "post_s": 30}
     results = []
     for model in args.models or [resolve_model(cfg.summary, client.models())]:

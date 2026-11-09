@@ -97,7 +97,7 @@ She says she feels tired and she doesn&#x27;t remember the last minute.<br>
 Ahmed, please go and call the school nurse.
 </p>
 
-**Key terms that must survive transcription:** `ten twenty`, `Sara`, `staring`, `chewing`, `forty seconds`, `nurse`
+**Key terms that must survive transcription:** `ten twenty`, `Sara` / `Sarah`, `staring`, `chewing`, `forty seconds`, `nurse`
 
 *Summary test: a good summary reports what was observed (time, staring, chewing movements, about 40 s, didn't fall, tired, nurse called) and does **not** diagnose.*
 
@@ -116,7 +116,7 @@ Ahmed, please go and call the school nurse.
 طيب، سؤال لكم: إذا كان أغلب الذرة فراغ، ليش ما نقدر نمشي من خلال الجدار؟
 </p>
 
-**Key terms that must survive transcription:** <bdi>`رذرفورد`</bdi>, <bdi>`الذهب`</bdi>, <bdi>`النواة`</bdi>, <bdi>`بروتونات`</bdi>, <bdi>`الإلكترونات`</bdi>, <bdi>`الذرة`</bdi>
+**Key terms that must survive transcription:** <bdi>`رذرفورد`</bdi> / <bdi>`راذرفورد`</bdi>, <bdi>`الذهب`</bdi>, <bdi>`النواة`</bdi>, <bdi>`بروتونات`</bdi>, <bdi>`الإلكترونات`</bdi>, <bdi>`الذرة`</bdi>
 
 ### `ar-pi` · Circles and pi (maths lesson) (~39 s)
 

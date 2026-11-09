@@ -4,6 +4,11 @@ Normalisation (so only real recognition errors count): Unicode NFKC, Arabic diac
 and tatweel removed, alef/hamza forms unified (أ إ آ -> ا), ى -> ي, ة -> ه, punctuation
 dropped, lower-case. Dialect spelling variants (كدا / كده) still count as errors -
 CER is the fairer number for Arabic dialects.
+
+Numbers count the same however they are written, because Whisper often writes digits for spoken
+numbers: "ten twenty" = "10-20" = "10:20" = "عشرة وعشرين" -> "10 20"; "forty" = "40" = "٤٠";
+"three point one four" = "3.14" = "ثلاثة فاصلة واحد أربعة" -> "3 14".
+Key terms may list equally valid spellings separated by "|" (Sara|Sarah, رذرفورد|راذرفورد).
 """
 
 from __future__ import annotations
@@ -13,14 +18,70 @@ import unicodedata
 
 _DIACRITICS = re.compile(r"[ً-ْٰـ]")
 _TIMESTAMP_PREFIX = re.compile(r"^\s*\[[^\]]*\]\s*(\(\w+\)\s*)?")
+_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "0123456789" * 2)
+
+# number words in normalised spelling (ة -> ه, أ -> ا). Ambiguous dialect words (ست, مية) are left out.
+_EN_UNITS = {w: i for i, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve "
+                                        "thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split())}
+_EN_TENS = {w: 10 * i for i, w in enumerate("twenty thirty forty fifty sixty seventy eighty ninety".split(), 2)}
+_AR_UNITS = {"صفر": 0, "واحد": 1, "واحده": 1, "اثنين": 2, "اثنان": 2, "ثلاث": 3, "ثلاثه": 3, "اربع": 4, "اربعه": 4,
+             "خمس": 5, "خمسه": 5, "سته": 6, "سبع": 7, "سبعه": 7, "ثمان": 8, "ثماني": 8, "ثمانيه": 8, "تسع": 9,
+             "تسعه": 9, "عشر": 10, "عشره": 10}
+_AR_TENS = {f"{stem}{end}": 10 * i for i, stem in enumerate(
+    ["عشر", "ثلاث", "اربع", "خمس", "ست", "سبع", "ثمان", "تسع"], 2) for end in ("ين", "ون")}
+_NUMBER_WORDS = {**_EN_UNITS, **_EN_TENS, **_AR_UNITS, **_AR_TENS, "hundred": 100, "مئه": 100, "مائه": 100}
+_POINT = {"point", "فاصله"}
+
+
+def _number(word: str) -> int | None:
+    if word.isdigit():
+        return int(word)
+    if word in _NUMBER_WORDS:
+        return _NUMBER_WORDS[word]
+    if word.startswith("و") and word[1:] in _NUMBER_WORDS:          # وعشرين = "and twenty"
+        return _NUMBER_WORDS[word[1:]]
+    return None
+
+
+def _canonical_numbers(words: list[str]) -> list[str]:
+    vals = [_number(w) for w in words]
+    out: list[str] = []
+    i = 0
+    while i < len(words):
+        v, nxt = vals[i], vals[i + 1] if i + 1 < len(words) else None
+        if v is not None and nxt is not None and 1 <= nxt <= 9 and v % 10 == 0 and 20 <= v <= 90 \
+                and words[i] in _EN_TENS and words[i + 1] in _EN_UNITS:           # forty two -> 42
+            out.append(str(v + nxt)); i += 2; continue
+        if v is not None and 1 <= v <= 9 and nxt is not None and words[i + 1].startswith("و") \
+                and words[i + 1][1:] in _AR_TENS:                                  # واحد وعشرين -> 21
+            out.append(str(v + nxt)); i += 2; continue
+        out.append(str(v) if v is not None else words[i])
+        i += 1
+    # spoken decimals: "3 point 1 4" -> "3 14", like "3.14" (whose dot became a space); digits after the
+    # point are said one by one, so they form one number. Other numbers stay separate ("3.4. 3.14").
+    joined: list[str] = []
+    j = 0
+    while j < len(out):
+        w = out[j]
+        if w in _POINT and joined and joined[-1].isdigit() and j + 1 < len(out) and out[j + 1].isdigit():
+            digits = ""
+            j += 1
+            while j < len(out) and out[j].isdigit() and (not digits or len(out[j]) == 1):
+                digits += out[j]
+                j += 1
+            joined.append(digits)
+            continue
+        joined.append(w)
+        j += 1
+    return joined
 
 
 def normalize(text: str) -> list[str]:
-    s = unicodedata.normalize("NFKC", text)
+    s = unicodedata.normalize("NFKC", text).translate(_DIGITS)
     s = _DIACRITICS.sub("", s)
     s = re.sub(r"[إأآا]", "ا", s).replace("ى", "ي").replace("ة", "ه").replace("’", "'")
     s = re.sub(r"[^\w\s']", " ", s.lower())
-    return s.split()
+    return _canonical_numbers(s.split())
 
 
 def strip_timestamps(lines: list[str]) -> str:
@@ -71,8 +132,9 @@ def term_present(term: str, text: str) -> bool:
 
 
 def key_term_recall(terms: list[str], hypothesis: str) -> tuple[float, list[str]]:
-    """Share of key terms (e.g. English terms inside Arabic speech) that came out correctly."""
-    missing = [k for k in terms if not term_present(k, hypothesis)]
+    """Share of key terms (e.g. English terms inside Arabic speech) that came out correctly.
+    A term may list alternative spellings: "Sara|Sarah" (reported by its first spelling when missing)."""
+    missing = [k.split("|")[0] for k in terms if not any(term_present(a, hypothesis) for a in k.split("|"))]
     return (1 - len(missing) / len(terms) if terms else 1.0), missing
 
 

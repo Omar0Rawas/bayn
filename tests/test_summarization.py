@@ -109,15 +109,25 @@ def test_facts_only_required_where_the_transcript_has_them():
 
 # ---------------------------------------------------------------- model choice (unit)
 @pytest.mark.unit
-def test_auto_model_depends_on_gpu_memory(monkeypatch):
+def test_auto_model_depends_on_gpu_and_ram(monkeypatch):
     monkeypatch.setattr(summary_models, "apple_silicon_memory_gb", lambda: 0.0)
+    monkeypatch.setattr(summary_models, "system_ram_gb", lambda: 8.0)
     monkeypatch.setattr(summary_models, "gpu_memory_mb", lambda: 11264)
-    assert summary_models.resolve_model(SummaryConfig()) == "qwen2.5:7b"
-    monkeypatch.setattr(summary_models, "gpu_memory_mb", lambda: 8192)        # 8 GB laptop: 7b + Whisper won't fit
-    assert summary_models.resolve_model(SummaryConfig()) == "qwen2.5:3b"
+    assert summary_models.resolve_model(SummaryConfig()) == "gemma4:e2b"
+    monkeypatch.setattr(summary_models, "gpu_memory_mb", lambda: 6144)        # 6 GB laptop GPU: fits with Whisper small
+    assert summary_models.resolve_model(SummaryConfig()) == "gemma4:e2b"
+    monkeypatch.setattr(summary_models, "gpu_memory_mb", lambda: 4096)        # small GPU, 8 GB RAM: the light model
+    assert summary_models.resolve_model(SummaryConfig()) == "qwen3:4b"
     monkeypatch.setattr(summary_models, "gpu_memory_mb", lambda: 0)           # CPU only
-    assert summary_models.resolve_model(SummaryConfig()) == "qwen2.5:3b"
+    assert summary_models.resolve_model(SummaryConfig()) == "qwen3:4b"
+    monkeypatch.setattr(summary_models, "system_ram_gb", lambda: 16.0)        # CPU only, 16 GB RAM
+    assert summary_models.resolve_model(SummaryConfig()) == "gemma4:e2b"
     assert summary_models.resolve_model(SummaryConfig(), available=["qwen2.5:7b"]) == "qwen2.5:7b"   # use what's there
+
+
+@pytest.mark.unit
+def test_system_ram_is_detected():
+    assert 1 < summary_models.system_ram_gb() < 4096
     assert summary_models.resolve_model(SummaryConfig(model="llama3.2:3b")) == "llama3.2:3b"
 
 

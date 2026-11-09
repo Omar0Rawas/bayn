@@ -145,6 +145,7 @@ class TranscriptionConfig(BaseModel):
     english_confidence: float = 0.9
     initial_prompt: str = "none"
     beam_size: int | Literal["auto"] = "auto"
+    cpu_threads: int | Literal["auto"] = "auto"
     vad_threshold: float = 0.5
     min_silence_s: float = 0.6
     max_utterance_s: float = 15.0

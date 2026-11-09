@@ -55,7 +55,10 @@ def check_summary(text: str, lang: str, checks: dict, variant: str | None = None
                  for group in groups)
         (found if ok else missing).append(fact["name"])
     invented = [w for w in checks.get("forbidden", {}).get(lang, []) if not w.startswith("_") and _norm(w) in t]
-    share = script_mix(text)["arabic"]
+    # the "unclear" section quotes transcript fragments verbatim (often Arabic in an English summary),
+    # so the language is judged on the summary and key points only
+    cut = text.lower().rfind(HEADINGS[lang][2])
+    share = script_mix(text[:cut] if cut > 0 else text)["arabic"]
     language_ok = share >= 0.75 if lang == "ar" else share <= 0.05
     format_ok = all(_norm(h) in t for h in HEADINGS[lang])
     return QualityReport(len(found) / max(len(facts), 1), found, missing, invented,

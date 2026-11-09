@@ -1,5 +1,5 @@
 {
-  "_about": "Bayn recording corpus. 4 topics x 3 versions (English, Arabic, mixed = Arabic with English key terms). The same content in every version, so languages can be compared fairly. Source of truth for docs/CORPUS.md (python -m bayn.corpus render), bayn record <id>, bayn eval-stt --corpus <id|all>, and the summary checks. Names are fictional.",
+  "_about": "Bayn recording corpus. 4 topics x 3 versions (English, Arabic, mixed = Arabic with English key terms). The same content in every version, so languages can be compared fairly. Source of truth for docs/CORPUS.md (python -m bayn.corpus render), bayn record <id>, bayn eval-stt --corpus <id|all>, and the summary checks. Names are fictional. Arabic summary facts also accept English terms written in Arabic letters (Whisper writes code-switched terms that way: nucleus -> النيوكليوس), because a bilingual reader understands them; transcription key terms stay strict (English letters).",
   "recording_tips": [
     "Record each script once with `.\\bayn record <id>` - the script opens in your browser in large type, one sentence per line (put it next to the terminal). Press Enter in the terminal to start, and again when you finish reading.",
     "Same microphone, same distance (about 20-30 cm), quiet room, for every recording, so models are compared on equal terms.",
@@ -11,9 +11,9 @@
     "atom": {
       "title": "The atom and Rutherford's experiment (science lesson)",
       "facts": [
-        {"name": "Rutherford's gold foil experiment", "en": [["rutherford"], ["gold"]], "ar": [["رذرفورد", "rutherford"], ["ذهب", "gold"]]},
+        {"name": "Rutherford's gold foil experiment", "en": [["rutherford"], ["gold"]], "ar": [["رذرفورد", "رذر", "راذر", "رادر", "rutherford"], ["ذهب", "جولد", "gold"]]},
         {"name": "a few particles bounced back", "en": [["bounc", "deflect", "came back", "back"]], "ar": [["ارتد", "ارتداد", "bounc", "رجع", "انعكس"]]},
-        {"name": "the mass is in a tiny nucleus", "en": [["nucleus"]], "ar": [["نواه", "nucleus"]]},
+        {"name": "the mass is in a tiny nucleus", "en": [["nucleus"]], "ar": [["نواه", "نيوكل", "نوكل", "nucleus"]]},
         {"name": "electrons move around the nucleus", "en": [["electron"]], "ar": [["الكترون", "electron"]]},
         {"name": "question: why can't we walk through walls", "en": [["wall"]], "ar": [["جدار", "حائط", "wall"]]}
       ],
@@ -22,8 +22,8 @@
     "pi": {
       "title": "Circles and pi (maths lesson)",
       "facts": [
-        {"name": "circumference = distance around the circle", "en": [["circumference"]], "ar": [["محيط", "circumference"]]},
-        {"name": "diameter = distance across through the centre", "en": [["diameter"]], "ar": [["قطر", "diameter"]]},
+        {"name": "circumference = distance around the circle", "en": [["circumference"]], "ar": [["محيط", "سركم", "سيركم", "سركون", "سيركون", "سركنفرنس", "circumference"]]},
+        {"name": "diameter = distance across through the centre", "en": [["diameter"]], "ar": [["قطر", "ديامتر", "دايامتر", "دياميتر", "diameter"]]},
         {"name": "the ratio is about 3.14", "en": [["3.14", "3 14", "three point one four"]], "ar": [["3.14", "3 14", "ثلاثه فاصله", "three point one four"]]},
         {"name": "the number is called pi", "en": [["pi", "π"]], "ar": [["ط", "باي", "pi", "π"]]},
         {"name": "homework: test three round objects at home", "en": [["homework"], ["round", "circular", "circle"]], "ar": [["واجب"], ["دائري", "دائريه", "دائره"]]}
@@ -33,10 +33,10 @@
     "plants": {
       "title": "Photosynthesis (biology lesson)",
       "facts": [
-        {"name": "plants make food by photosynthesis", "en": [["photosynthesis"]], "ar": [["البناء الضوئي", "التمثيل الضوئي", "photosynthesis"]]},
-        {"name": "leaves take in carbon dioxide", "en": [["carbon dioxide", "co2"]], "ar": [["ثاني اكسيد الكربون", "carbon dioxide", "co2"]]},
-        {"name": "chlorophyll captures sunlight", "en": [["chlorophyll"]], "ar": [["كلوروفيل", "يخضور", "chlorophyll"]]},
-        {"name": "oxygen is released", "en": [["oxygen"]], "ar": [["اكسجين", "الاكسجين", "oxygen"]]},
+        {"name": "plants make food by photosynthesis", "en": [["photosynthesis"]], "ar": [["البناء الضوئي", "التمثيل الضوئي", "فوتوسين", "فوتو سين", "فوتوسنث", "photosynthesis"]]},
+        {"name": "leaves take in carbon dioxide", "en": [["carbon dioxide", "co2"]], "ar": [["ثاني اكسيد الكربون", "كاربون داي", "كاربن داي", "كربون", "carbon dioxide", "co2"]]},
+        {"name": "chlorophyll captures sunlight", "en": [["chlorophyll"]], "ar": [["كلوروف", "يخضور", "chlorophyll"]]},
+        {"name": "oxygen is released", "en": [["oxygen"]], "ar": [["اكسجين", "اوكسج", "اوكسيج", "oxygen"]]},
         {"name": "question: a plant kept in the dark for a week", "en": [["dark"]], "ar": [["مظلم", "ظلام", "الظلام", "dark"]]}
       ],
       "forbidden": {"en": ["seizure", "epilep", "diagnos"], "ar": ["نوبه", "صرع", "تشخيص"]}
@@ -47,10 +47,10 @@
         {"name": "time: 10:20", "en": [["10:20", "10 20", "ten twenty", "10.20"]], "ar": [["10:20", "10 20", "عشره وعشرين", "العاشره والثلث", "10.20"]]},
         {"name": "staring, not responding to her name", "en": [["star", "not respond", "unresponsive", "didn't respond", "no response"]], "ar": [["تحدق", "تحديق", "ما ترد", "لا ترد", "لم ترد", "لا تستجيب", "لم تستجب"]]},
         {"name": "lip / chewing movements", "en": [["chew", "lip"]], "ar": [["تمضغ", "مضغ", "شفايف", "شفتي", "شفاه"]]},
-        {"name": "lasted about forty seconds", "en": [["40", "forty"]], "ar": [["اربعين", "40", "forty"]]},
+        {"name": "lasted about forty seconds", "en": [["40", "forty"], ["second", "sec"]], "ar": [["اربعين", "40", "forty"], ["ثاني", "ثوان", "سيكند", "second"]]},
         {"name": "did not fall, stayed seated", "en": [["fall", "fell", "seated", "sitting"]], "ar": [["طاحت", "تسقط", "سقوط", "تقع", "جالسه", "جالس"]]},
         {"name": "afterwards tired, doesn't remember", "en": [["remember", "recall"]], "ar": [["تتذكر", "تذكر", "remember"]]},
-        {"name": "the school nurse was called", "en": [["nurse"]], "ar": [["ممرض", "nurse"]]}
+        {"name": "the school nurse was called", "en": [["nurse"]], "ar": [["ممرض", "نورس", "نيرس", "nurse"]]}
       ],
       "forbidden": {"_about": "observational narration: a summary must not diagnose or exaggerate",
                     "en": ["seizure", "epilep", "diagnos", "fainted", "unconscious", "she fell", "ambulance"],
@@ -69,11 +69,11 @@
      "key_terms": ["photosynthesis", "carbon dioxide", "chlorophyll", "oxygen", "sugar"]},
     {"id": "en-incident", "language": "en", "topic": "incident",
      "text": "It's ten twenty. Sara stopped answering in the middle of the reading. She's staring at the board and she's not responding to her name. Her lips are moving, like small chewing movements, and her left hand is fidgeting with her pencil. I'm timing it now. About forty seconds have passed. She didn't fall, she's still sitting in her chair. Okay, she's blinking now and looking around. She says she feels tired and she doesn't remember the last minute. Ahmed, please go and call the school nurse.",
-     "key_terms": ["ten twenty", "Sara", "staring", "chewing", "forty seconds", "nurse"]},
+     "key_terms": ["ten twenty", "Sara|Sarah", "staring", "chewing", "forty seconds", "nurse"]},
 
     {"id": "ar-atom", "language": "ar", "topic": "atom",
      "text": "صباح الخير يا شباب. اليوم بنتكلم عن الذرة. قبل حوالي مئة سنة، قام عالم اسمه إرنست رذرفورد بإطلاق جسيمات صغيرة جداً على صفيحة رقيقة من الذهب. معظم الجسيمات عبرت الصفيحة مباشرة، لكن بعضها ارتد للخلف. واستنتج رذرفورد أن معظم كتلة الذرة موجودة في مركز صغير جداً اسمه النواة. النواة فيها بروتونات شحنتها موجبة، والإلكترونات تتحرك حولها. طيب، سؤال لكم: إذا كان أغلب الذرة فراغ، ليش ما نقدر نمشي من خلال الجدار؟",
-     "key_terms": ["رذرفورد", "الذهب", "النواة", "بروتونات", "الإلكترونات", "الذرة"]},
+     "key_terms": ["رذرفورد|راذرفورد", "الذهب", "النواة", "بروتونات", "الإلكترونات", "الذرة"]},
     {"id": "ar-pi", "language": "ar", "topic": "pi",
      "text": "طيب، طلّعوا المساطر. قيسوا المسافة حول هذه الدائرة، وهذا اسمه المحيط. الحين قيسوا المسافة من طرف لطرف مروراً بالمركز، وهذا اسمه القطر. إذا قسمنا المحيط على القطر نحصل دائماً على نفس العدد، تقريباً ثلاثة فاصلة واحد أربعة. نسمي هذا العدد ط. ما يفرق إذا كانت الدائرة صغيرة مثل العملة أو كبيرة مثل العجلة. إذن القانون: المحيط يساوي ط ضرب القطر. والواجب: دوروا على ثلاث أشياء دائرية في البيت وجربوا بأنفسكم.",
      "key_terms": ["المحيط", "القطر", "ط", "ثلاثة فاصلة واحد أربعة", "القانون"]},
