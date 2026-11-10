@@ -43,7 +43,7 @@ bayn-models = "bayn.transcription.models:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-bayn = ["ui/static/*"]
+bayn = ["ui/static/*", "seizure/assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -271,6 +271,8 @@ function renderTriggerStatus(s) {
       : " Triple blink: threshold rule. Train the ML detector for fewer false triggers.";
   }
   if (s.training && $("train-overlay").hidden) renderTraining(s.training);     // page reloaded mid-session
+  const sz = $("seizure-enabled");
+  if (document.activeElement !== sz && s.seizure_enabled !== undefined) sz.checked = Boolean(s.seizure_enabled);
   $("trigger-hint").textContent = hint + (s.suppressed ? ` · ${s.suppressed} gesture(s) ignored during cooldown` : "");
 }
 
@@ -379,7 +381,10 @@ const SOURCE_TEXT = { gesture: "", button: " (button)", hotkey: " (T key)" };
 
 function showBanner(m) {
   const el = $("event-banner");
-  el.textContent = `⚡ Event: ${m.label}${SOURCE_TEXT[m.source] || ""}. Saving EEG −${m.pre_s} s / +${m.post_s} s`;
+  el.textContent = m.kind === "seizure"
+    ? `⚠ ${m.label}: mock model, not a diagnosis. Saving EEG −${m.pre_s} s / +${m.post_s} s`
+    : `⚡ Event: ${m.label}${SOURCE_TEXT[m.source] || ""}. Saving EEG −${m.pre_s} s / +${m.post_s} s`;
+  el.classList.toggle("seizure", m.kind === "seizure");
   el.classList.add("show");
   clearTimeout(showBanner._t);
   showBanner._t = setTimeout(() => el.classList.remove("show"), 4000);
@@ -719,6 +724,7 @@ $("train-retrain").addEventListener("click", () => {
 $("train-cancel").addEventListener("click", () => post("/api/events/training", { action: "cancel" }));
 $("train-close").addEventListener("click", () => { $("train-overlay").hidden = true; });
 $("blink-method").addEventListener("change", (e) => post("/api/events/blink_method", { method: e.target.value }));
+$("seizure-enabled").addEventListener("change", (e) => post("/api/events/seizure", { enabled: e.target.checked }));
 $("btn-sound").addEventListener("click", () => {
   sound.on = !sound.on;
   try { localStorage.setItem("bayn.sound", sound.on ? "on" : "off"); } catch (e) { /* ignore */ }

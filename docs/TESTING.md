@@ -446,6 +446,29 @@ Once the blink signal was right, the user asked whether ML is needed at all (202
 | **10 min of normal activity** (talking, head movement, natural blinking) with the trigger armed | Manual (user) | ≤ 1 false trigger | ⏳ |
 | Gesture-to-event latency | Manual | ≤ 1.5 s after the last blink | ⏳ (by design ~0.5–0.7 s after the third blink) |
 
+### Seizure-detector socket with a mock model (2026-11-10) ✅ software, simulator
+
+**Goal** (user): show how a seizure model plugs into the `Detector` socket. The user's requirement: train on *real*
+public data, with a clear disclaimer that it isn't validated on Muse data.
+- **Data search:** CHB-MIT (PhysioNet, ODC-By 1.0, scalp EEG at 256 Hz like the Muse, 198 annotated seizures) was
+  chosen over Siena (CC-BY 4.0, 512 Hz, 47 seizures) and the Bonn sets (single channel, no licence stated).
+- **Model:** a logistic regression on 14 features; channels are approximated Muse-like derivations from the
+  bipolar montage. The model card is [SEIZURE_MODEL.md](SEIZURE_MODEL.md).
+
+| Activity | Level | Acceptance criterion | Result |
+|---|---|---|---|
+| EDF reader, Muse-like channel mapping, annotation parser (both summary formats) | Unit | exact values | ✅ |
+| Streaming features equal offline features (odd chunk sizes); no baseline in the first 30 s | Unit | identical | ✅ |
+| Labels exclude the transition around seizures; alarm needs 5 consecutive windows; 120 s refractory | Unit | as designed | ✅ |
+| Leave-one-patient-out on CHB-MIT (8 patients, 46.9 h, 28 seizures) | Offline evaluation | report sensitivity, delay, false alarms/h | **21/28 (75 %), median 20 s, 3.6/h** at threshold 0.9 (random forest: 8/28) |
+| Shipped model: 14 coefficients matching the features, Muse channels, disclaimer text | Unit | as designed | ✅ |
+| Detector on simulated EEG fires on the replayed CHB-MIT clip (patient chb23, not used for training) | Integration | one alarm, -10…+45 s around onset | ✅ |
+| Detector ignores 12 gestures and artefacts (clench, triple blink, talking, nods, head turns, glances, eyebrows, squeeze) | Integration | no alarm | ✅ |
+| Socket off by default, runs beside any gesture when on; headset without the Muse channels → never fires | Unit | as designed | ✅ |
+| Event manager turns the alarm into a `seizure`-kind event | Integration | label says "mock" | ✅ |
+| Dashboard switch on/off, status shows the detector with its disclaimer | System | as designed | ✅ |
+| On a real Muse | – | – | **not done, and not claimed** |
+
 ### Phase 7: Setup & packaging polish (planned)
 
 Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and the GPU all need native processes, so containers would add complexity without simplifying setup.

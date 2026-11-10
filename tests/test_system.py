@@ -297,3 +297,21 @@ def test_bad_gesture_rejected(running_stack):
     with pytest.raises(urllib.error.HTTPError) as e:
         urllib.request.urlopen(req)
     assert e.value.code == 400
+
+
+def test_seizure_socket_switch(running_stack):
+    """The dashboard switches the mock seizure model on and off; the trigger status reports it."""
+    ui = running_stack
+    sent = {}
+
+    def actions(m):
+        if m["type"] == "trigger_status" and not sent:
+            sent["x"] = True
+            assert _post(ui, "/api/events/seizure", {"enabled": True}) == 202
+
+    on = lambda ms: any(m["type"] == "trigger_status" and m.get("seizure_enabled")
+                        and any(d["name"] == "seizure_model" for d in m["detectors"]) for m in ms)
+    msgs = asyncio.run(_collect(ui, on, 15, actions))
+    st = [m for m in msgs if m["type"] == "trigger_status" and m.get("seizure_enabled")][-1]
+    d = next(d for d in st["detectors"] if d["name"] == "seizure_model")
+    assert "not validated on Muse" in d["disclaimer"] and d["unit"].startswith("%")

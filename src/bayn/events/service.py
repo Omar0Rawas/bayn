@@ -118,6 +118,8 @@ class EventsService:
             else:
                 self._publish(m.start_training(c.get("protocol", "standard"),
                                                condition=c.get("condition", "seated")))
+        elif cmd == "set_seizure":
+            m.set_seizure(bool(c.get("enabled")))
         elif cmd == "set_blink_method" and c.get("method") in ("auto", "rule", "ml"):
             m.set_blink_method(c["method"])
         else:

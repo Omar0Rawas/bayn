@@ -66,6 +66,10 @@ Check every change against the laptop, not just the dev PC:
   candidate finder → 27 features (incl. TP9/TP10 vs forehead) → random forest → data/models/blink-<profile>-<source>
   .joblib → `MLDoubleBlinkDetector` (rule fallback; `double_blink.method` auto = ML only if it beat the rule held-out). Finder + features must stay identical
   offline and live (test). Real Muse forehead noise is 22-87 µV (sim ~10): check changes on real windows too.
+- Seizure socket (2026-11-10): `SeizureModelDetector` (events/detectors/seizure_model.py) = MOCK logistic model
+  trained on CHB-MIT (bayn.seizure: chbmit / features / train; assets/model.json + chbmit_clip.npz shipped; data in
+  data/datasets, gitignored). Always say: NOT validated on Muse data, NOT for clinical use (docs/SEIZURE_MODEL.md).
+  Off by default (`events.seizure.enabled`), on in `bayn demo`; simulator "seizure" replays the clip.
 - Config: config/default.yaml <- config/local.yaml <- .env <- env vars `BAYN_SECTION__KEY` (src/bayn/common/config.py).
 
 ## Hardware notes

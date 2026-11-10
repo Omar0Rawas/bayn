@@ -221,6 +221,9 @@ select { font: inherit; color: var(--ink); background: var(--card); border: 1px 
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0;
   background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; transition: all .2s; pointer-events: none; max-width: calc(100% - 32px); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.seizure-row { margin: 6px 0 10px; }
+.seizure-note { margin: 2px 0 0 22px; }
+.event-banner.seizure { background: var(--bad); }
 .train-options { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 8px; }
 .train-options .field { flex: 1; min-width: 200px; margin: 0; }
 .check { display: flex; gap: 6px; align-items: center; font-size: 13px; }

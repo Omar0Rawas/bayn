@@ -101,8 +101,10 @@ USER = {
 }
 
 TRIGGERS = {
-    "en": {"clench": "jaw-clench gesture", "triple_blink": "triple-blink gesture", "double_blink": "double-blink gesture", "manual": "manual trigger"},
-    "ar": {"clench": "إيماءة شدّ الفك", "triple_blink": "إيماءة الرمش ثلاث مرات", "double_blink": "إيماءة الرمش مرتين", "manual": "ضغط يدوي"},
+    "en": {"clench": "jaw-clench gesture", "triple_blink": "triple-blink gesture", "double_blink": "double-blink gesture", "manual": "manual trigger",
+           "seizure_model": "automatic seizure-pattern detector (a mock research model, not validated, not a diagnosis)"},
+    "ar": {"clench": "إيماءة شدّ الفك", "triple_blink": "إيماءة الرمش ثلاث مرات", "double_blink": "إيماءة الرمش مرتين", "manual": "ضغط يدوي",
+           "seizure_model": "كاشف آلي لنمط يشبه النوبة (نموذج بحثي تجريبي غير مُعتمد، وليس تشخيصاً)"},
 }
 
 BANDS = {

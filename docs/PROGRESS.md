@@ -414,3 +414,23 @@ natural speech, replay offline (default / T=0 only / single-encode / 4 threads).
     (transcript waited 9 s for the sentence in progress). Both accurate; the Arabic one repaired the ASR slips
     (مساواة, مضروب) and invented nothing; one odd word (يُجى). EEG section written by code, as designed.
   - Not reached: the 2-3 s live-line target (6-10 s here, accepted by the user for the demo).
+
+## Seizure-detector socket with a mock model (2026-11-10) ✅ (user confirmed 2026-11-11)
+User request (after the laptop demo): "a mock ML model that detects seizures and plug it into the socket",
+trained on real public data with a disclaimer that it isn't validated on Muse data.
+- Dataset search → **CHB-MIT** (PhysioNet, ODC-By 1.0, 256 Hz scalp EEG). Subset of 8 patients (1.9 GB in
+  data/datasets/chbmit, gitignored): `python -m bayn.seizure.chbmit download`. Minimal EDF reader (no new dependency).
+- Four Muse-like channels approximated from the bipolar montage; 14 features per 4 s window every 1 s, mostly relative
+  to the person's own baseline (bayn.seizure.features, identical offline and live).
+- Leave-one-patient-out: logistic regression **21/28 seizures, median 20 s, 3.6 false alarms/h** at threshold 0.9
+  (random forest worse: 8/28). Shipped: src/bayn/seizure/assets/model.json (2 KB, coefficients, no pickle) +
+  chbmit_clip.npz (a real seizure of chb23, not used for training, 249 KB). Model card: docs/SEIZURE_MODEL.md.
+- `SeizureModelDetector` in the `Detector` socket: P >= 0.9 for 5 windows, 120 s refractory; event kind "seizure",
+  red banner "mock model, not a diagnosis"; summary prompt calls it a mock research detector. Off by default
+  (`events.seizure.enabled`), on in `bayn demo`; dashboard switch; simulator button replays the clip.
+- Tests: 11 new (EDF, mapping, features, labels, alarms, model file, fires on the clip, ignores 12 gestures and
+  artefacts, manager event, dashboard switch).
+
+Next (user's list, 2026-11-10): 2) easier setup, with no manual copying of blink training; 3) easy testing and
+demoing for whoever downloads the repo (judges); 4) repo and docs cleanup, GIFs, demo videos.
+

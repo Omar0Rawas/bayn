@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         env["BAYN_EEG__SOURCE"] = "sim"
         env["BAYN_SIMULATOR__AUTO_GESTURES__ENABLED"] = "true"
         env.setdefault("BAYN_EVENTS__GESTURE", "both")     # scripted gestures alternate clench / triple blink
+        env.setdefault("BAYN_EVENTS__SEIZURE__ENABLED", "true")   # show the seizure socket (mock model)
     if args.source:
         env["BAYN_EEG__SOURCE"] = args.source
     if args.audio:

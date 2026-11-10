@@ -15,6 +15,9 @@ Artefacts that must not trigger anything (Phase 6, the ML blink detector learns 
                 (three nods = the classic false triple blink), plus neck EMG
   look_side     horizontal eye movement: AF7 and AF8 move in OPPOSITE directions and hold
   talk          a few seconds of jaw EMG bursts (strong on TP9/TP10) with small slow jaw artefacts
+For the seizure socket (mock model, docs/SEIZURE_MODEL.md):
+  seizure       replays a REAL seizure from the public CHB-MIT database (patient not used for training),
+                as Muse-like channels, scaled so its pre-seizure part matches this simulator's background
 
 Blinks also appear, smaller, on TP9/TP10 (`tp_blink_coupling`): the user saw a synchronised TP9/TP10
 peak when blinking on the real headset. In the first real recordings (Phase 3 event windows) it was
@@ -160,6 +163,32 @@ class SimulatedEEG:
             ov[:, start:start + len(hump)] += np.where(self._is_front, 1.0, 0.1)[:, None]                 * self.rng.uniform(40, 90) * hump[None, :n - start]
         return ov
 
+    def _seizure(self, lead_s: float = 15.0, target_uv: float = 20.0) -> np.ndarray:
+        """The CHB-MIT clip from `lead_s` before the seizure onset, mapped to this simulator's channels. Its
+        pre-seizure part is scaled to `target_uv` robust sigma (real Muse forehead noise: 22-87 uV)."""
+        from bayn.seizure.train import CLIP_PATH
+
+        try:
+            z = np.load(CLIP_PATH)
+        except OSError as e:
+            raise ValueError(f"seizure clip not available ({CLIP_PATH}): run python -m bayn.seizure.train --clip") from e
+        clip, fs, onset = z["data"].astype(np.float64), float(z["fs"]), float(z["onset_s"])
+        if abs(fs - self.fs) > 1:
+            raise ValueError(f"seizure clip is {fs:.0f} Hz, simulator {self.fs:.0f} Hz")
+        order = ["TP9", "AF7", "AF8", "TP10"]
+        a, o = int((onset - lead_s) * fs), int(onset * fs)
+        pre = clip[:, a:o]
+        scale = target_uv / (1.4826 * np.median(np.abs(pre - np.median(pre, axis=1, keepdims=True)), axis=1) + 1e-6)
+        seg = (clip[:, a:] - clip[:, a:o].mean(axis=1, keepdims=True)) * scale[:, None]
+        ramp = np.ones(seg.shape[1])
+        n = int(fs)
+        ramp[:n], ramp[-n:] = np.linspace(0, 1, n), np.linspace(1, 0, n)
+        ov = np.zeros((self.n_ch, seg.shape[1]))
+        for i, ch in enumerate(self.channels):
+            if ch in order:
+                ov[i] = seg[order.index(ch)] * ramp
+        return ov
+
     def _talk(self) -> np.ndarray:
         n = int(self.rng.uniform(3.0, 5.0) * self.fs)
         ov = np.zeros((self.n_ch, n))
@@ -213,7 +242,7 @@ class SimulatedEEG:
             else:
                 ov = {"head_turn": self._head_turn, "nod": self._nod, "look_side": self._look_side,
                       "talk": self._talk, "squeeze": self._squeeze, "look_updown": self._look_updown,
-                      "eyebrows": self._eyebrows}[gesture]()
+                      "eyebrows": self._eyebrows, "seizure": self._seizure}[gesture]()
             return self._schedule(ov, d)
 
     def generate(self, n: int) -> np.ndarray:

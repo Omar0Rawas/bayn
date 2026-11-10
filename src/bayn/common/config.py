@@ -110,6 +110,11 @@ class BlinkConfig(BaseModel):
     ml_threshold: float = 0.5                          # P(triple blink) needed to fire
 
 
+class SeizureConfig(BaseModel):
+    enabled: bool = False            # the MOCK seizure model (docs/SEIZURE_MODEL.md); `bayn demo` turns it on
+    threshold: float | None = None   # None = the model's own (0.9)
+
+
 class TrainingConfig(BaseModel):
     auto_inject_sim: bool = True     # simulator: perform each prompted gesture automatically
     scale: float = 1.0               # < 1 shortens the protocols (tests)
@@ -135,6 +140,7 @@ class EventsConfig(BaseModel):
     triple_blink: BlinkConfig = BlinkConfig()
     calibration: CalibrationConfig = CalibrationConfig()
     training: TrainingConfig = TrainingConfig()
+    seizure: SeizureConfig = SeizureConfig()
 
 
 class AudioConfig(BaseModel):

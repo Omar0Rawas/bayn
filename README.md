@@ -106,6 +106,7 @@ Other commands: `test`, `doctor` (check a machine before a demo: Bluetooth, Muse
 | **Jaw clench** (default) | Clench firmly and hold for about 1 s | Muscle activity on the sensors behind the ears (TP9/TP10). Talking or swallowing is too short to fire. |
 | **Triple blink** | Three firm blinks at a steady pace (~2 per second, each within 0.8 s of the last) | A single, double or four-fold blink doesn't fire (`events.triple_blink.count` sets the number). On the Muse, blinks show up mostly on the **ear sensors** (TP9/TP10), because its reference electrode sits on the forehead. Record a few labelled sessions (Blink detector → Train…) so Bayn learns *your* blink pattern; the rule then counts blinks on that pattern. A machine-learning classifier was tested and isn't needed ([decision](docs/BLINK_DECISION.md)). Keep your head still: nodding is the main false trigger. |
 | **Button / `T` key** | "Trigger event" in the dashboard | Always available as a backup. |
+| **Seizure detector** (mock model, off by default) | Automatic | Shows how a real seizure model plugs into the same socket ([details below](#seizure-detector-socket-mock-model)). |
 
 Pick the gesture in the dashboard's **Event trigger** card (or `events.gesture` in the config). Then press **Calibrate…** once per person: 15 s of rest, then 3 prompted repetitions. The thresholds are saved per user, in `data/profiles/`. After an event, further gestures are ignored for a 15 s cooldown.
 
@@ -113,6 +114,29 @@ Each event:
 - flashes a banner, marks the plot, and beeps (turn sound on with 🔔)
 - saves the EEG from **10 s before to 30 s after** to `data/events/<id>/` as `eeg.csv`, `eeg.npz` and `meta.json` (with before/after brainwave stats). The files are downloadable from the timeline.
 - gets the **transcript of its window** attached (`transcript.txt` / `.json`, times relative to the event), which feeds the summary (Phase 5)
+
+## Seizure-detector socket (mock model)
+
+> [!WARNING]
+> **Not validated on Muse data. Not a medical device. Not for any clinical use.**
+
+Every trigger above is a `Detector` ([detectors/base.py](src/bayn/events/detectors/base.py)). A seizure model plugs into
+the same socket, and its alarm then follows exactly the same path: event → saved EEG window → transcript → summary.
+To show that path working, Bayn ships a **mock seizure model**:
+
+- **Trained on public hospital EEG:** the [CHB-MIT Scalp EEG Database](https://physionet.org/content/chbmit/1.0.0/)
+  (PhysioNet, ODC-By 1.0), from 8 children, 47 h, 28 seizures. Four Muse-like channels are approximated from the
+  hospital montage.
+- **A small, transparent model:** a logistic regression with 14 coefficients, on features that compare each 4 s of EEG
+  with the person's own last few minutes (power, line length, rhythm, synchrony).
+- **Scored honestly, on CHB-MIT only:** each patient is held out in turn. It detects 21/28 seizures, a median 20 s
+  after onset, with 3.6 false alarms per hour. It has **never** been tested on Muse recordings.
+- **Details:** the [model card](docs/SEIZURE_MODEL.md) covers the data, the evaluation and how to reproduce it.
+
+Try it without a headset: `.\bayn demo`, then **Simulator → Seizure (CHB-MIT clip)**. This replays a real seizure from
+a patient the model never saw. The detector raises a red "Seizure-like pattern (mock model)" event about 20–30 s
+later, and the summary describes what was heard without diagnosing. The switch is **Event trigger → Seizure
+detector**, or `events.seizure.enabled` in the config. It is off by default and on in `demo`.
 
 ## Live transcription
 

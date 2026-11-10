@@ -67,6 +67,9 @@ events:
     method: auto           # auto = the trained ML classifier if it beat the rule on held-out data, else the rule
                            # rule = always the threshold rule · ml = the classifier whenever one is trained
     ml_threshold: 0.5      # P(triple blink) the classifier needs to fire
+  seizure:                 # the seizure-detector SOCKET, filled with a MOCK model (docs/SEIZURE_MODEL.md):
+    enabled: false         # trained on public CHB-MIT EEG; NOT validated on Muse data, NOT for clinical use.
+    threshold: null        # null = the model's own (0.9). `bayn demo` switches it on
   training:                # labelled recording sessions for the ML blink detector (dashboard: Train blink detector)
     auto_inject_sim: true  # in simulated mode the simulator performs the prompted gestures
     scale: 1.0             # < 1 shortens the protocols (tests only)

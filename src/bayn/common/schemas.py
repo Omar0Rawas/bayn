@@ -34,7 +34,8 @@ TOPIC_SUMMARY_STATUS = "summary.status"      # Ollama reachable, model, last spe
 AUDIO_SR = 16000                             # Whisper's sample rate
 
 GESTURES = ("clench", "triple_blink", "double_blink", "blink", "four_blinks", "squeeze",
-            "head_turn", "nod", "look_side", "look_updown", "eyebrows", "talk")  # all but the first two must NOT trigger
+            "head_turn", "nod", "look_side", "look_updown", "eyebrows", "talk",  # these must NOT trigger
+            "seizure")      # replays a real CHB-MIT seizure (mock seizure model demo)
 
 
 @dataclass(slots=True)

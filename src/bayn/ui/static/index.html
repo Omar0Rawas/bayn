@@ -81,6 +81,14 @@
         </label>
         <button class="btn ghost" id="btn-train" type="button">Train…</button>
       </div>
+      <div class="seizure-row">
+        <label class="check" title="A demonstration of the seizure-detector socket">
+          <input type="checkbox" id="seizure-enabled"> Seizure detector <span class="badge muted">mock model</span>
+        </label>
+        <p class="muted small seizure-note">Trained on public CHB-MIT hospital EEG to show how a seizure model plugs in.
+          <b>Not validated on Muse data, not for clinical use.</b>
+          <a href="https://github.com/Omar0Rawas/bayn/blob/main/docs/SEIZURE_MODEL.md" target="_blank" rel="noopener">Model card</a></p>
+      </div>
       <button class="btn primary big" id="btn-trigger" type="button"
               title="Backup manual trigger (hotkey T)">Trigger event <kbd>T</kbd></button>
       <div class="btn-row">
@@ -106,6 +114,11 @@
         <button class="btn ghost" data-inject="head_turn" type="button">Head turn</button>
         <button class="btn ghost" data-inject="look_side" type="button">Look sideways</button>
         <button class="btn ghost" data-inject="talk" type="button">Talk</button>
+      </div>
+      <p class="muted small">Seizure socket demo (switch on "Seizure detector" first):</p>
+      <div class="btn-row">
+        <button class="btn" data-inject="seizure" type="button"
+                title="Replays a real seizure from the public CHB-MIT database (patient not used for training)">Seizure (CHB-MIT clip)</button>
       </div>
       <ul class="log" id="inject-log"></ul>
     </section>

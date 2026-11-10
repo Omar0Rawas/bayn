@@ -165,6 +165,10 @@ class TrainingRequest(BaseModel):
     condition: str = "seated"       # seated | standing | walking
 
 
+class SeizureRequest(BaseModel):
+    enabled: bool
+
+
 class SessionDeleteRequest(BaseModel):
     id: str
 
@@ -290,6 +294,12 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
         if not delete_recording(cfg.events.profile, _eeg_source(), req.id):
             raise HTTPException(404, "no such session")
         return {"deleted": req.id}
+
+    @app.post("/api/events/seizure", status_code=202)
+    async def seizure(req: SeizureRequest) -> dict:
+        """Switch the seizure socket's MOCK model on/off (docs/SEIZURE_MODEL.md)."""
+        _send_events({"cmd": "set_seizure", "enabled": req.enabled})
+        return {"queued": req.enabled}
 
     @app.post("/api/events/blink_method", status_code=202)
     async def blink_method(req: BlinkMethodRequest) -> dict:

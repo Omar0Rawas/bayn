@@ -33,7 +33,7 @@ TRAIN = "_train"             # asks the service to train the blink classifier (i
 STALE_GRACE_S = 5.0          # finalize by wall clock if EEG stopped arriving
 
 LABELS = {"clench": "Jaw clench", "triple_blink": "Triple blink", "double_blink": "Double blink", "manual": "Manual trigger",
-          "seizure_stub": "Seizure detector"}
+          "seizure_stub": "Seizure detector", "seizure_model": "Seizure-like pattern (mock model)"}
 
 
 @dataclass(slots=True)
@@ -84,6 +84,10 @@ class EventManager:
         from bayn.events.blink_ml import model_path
 
         return model_path(self.cfg.profile, self.source)
+
+    def set_seizure(self, enabled: bool) -> None:
+        self.cfg = self.cfg.model_copy(update={"seizure": self.cfg.seizure.model_copy(update={"enabled": enabled})})
+        self.set_gesture(self.gesture)
 
     def set_blink_method(self, method: str) -> None:
         self.cfg = self.cfg.model_copy(update={"triple_blink": self.cfg.triple_blink.model_copy(
@@ -319,6 +323,7 @@ class EventManager:
             "recording": [{"id": p.meta["id"], "ends_at": p.finalize_at} for p in self.pending],
             "suppressed": self.suppressed, "profile": self.profile_path.name,
             "blink_method": self.cfg.triple_blink.method,
+            "seizure_enabled": self.cfg.seizure.enabled,
             "training": self.training.message(now) if self.training else None,
             "calibrated": all(getattr(d, "calibrated_threshold", None) is not None
                               for d in self.detectors if d.calibratable) and bool(self.detectors),
