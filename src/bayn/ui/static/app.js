@@ -228,7 +228,8 @@ function renderSoundBtn() {
 }
 
 // ------------------------------------------------------------------ trigger status + meters
-const STATE_TEXT = { armed: "Armed", cooldown: "Cooldown", calibrating: "Calibrating", manual: "Manual only" };
+const STATE_TEXT = { armed: "Armed", cooldown: "Cooldown", calibrating: "Calibrating", manual: "Manual only",
+  training: "Recording" };
 
 function renderTriggerStatus(s) {
   const badge = $("trigger-state");
@@ -256,9 +257,120 @@ function renderTriggerStatus(s) {
     el.querySelector(".lbl span").textContent =
       `${(d.level || 0).toFixed(0)} / ${d.threshold.toFixed(0)} ${d.unit}${d.calibrated ? " · calibrated" : ""}`;
   }
-  const hint = s.gesture === "manual" ? "Gestures off. Use the button or press T."
+  let hint = s.gesture === "manual" ? "Gestures off. Use the button or press T."
     : s.calibrated ? `Calibrated (${s.profile}).` : "Not calibrated yet. Using default thresholds. Calibrate for best results.";
+  const blink = s.detectors.find((d) => d.name === "triple_blink");
+  $("blink-row").hidden = !blink;
+  if (blink) {
+    const sel = $("blink-method");
+    if (document.activeElement !== sel && s.blink_method && sel.value !== s.blink_method) sel.value = s.blink_method;
+    hint += blink.method === "ml"
+      ? ` Triple blink: ML classifier${blink.last_p != null ? ` (last P = ${blink.last_p})` : ""}.`
+      : blink.wanted === "rule" ? ""
+      : blink.model ? " Triple blink: threshold rule (the trained model hasn't beaten it yet; record another session)."
+      : " Triple blink: threshold rule. Train the ML detector for fewer false triggers.";
+  }
+  if (s.training && $("train-overlay").hidden) renderTraining(s.training);     // page reloaded mid-session
   $("trigger-hint").textContent = hint + (s.suppressed ? ` · ${s.suppressed} gesture(s) ignored during cooldown` : "");
+}
+
+// ------------------------------------------------------------------ blink-detector training overlay
+let trainTimer = null;
+const PROTOCOL_NAMES = { standard: "Standard", noisy: "Noisy", boundaries: "Boundaries" };
+async function loadTrainSessions() {
+  try {
+    const r = await (await fetch("/api/events/training/sessions")).json();
+    $("train-sessions-count").textContent = `(${r.sessions.length})`;
+    $("train-sessions").innerHTML = r.sessions.map((s) => `<li><span>${PROTOCOL_NAMES[s.protocol] || s.protocol}
+      · ${s.condition} · ${s.minutes} min · ${new Date(s.created * 1000).toLocaleString()}</span>
+      <button class="btn ghost small-btn" data-delete-session="${escapeHtml(s.id)}" type="button">Delete</button></li>`).join("")
+      || '<li class="muted">None yet</li>';
+  } catch (e) { /* events service not up yet */ }
+}
+$("train-sessions").addEventListener("click", async (e) => {
+  const id = e.target.dataset.deleteSession;
+  if (!id || !confirm("Delete this recording session? This can't be undone.")) return;
+  const r = await fetch("/api/events/training/delete", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+  toast(r.ok ? "Session deleted. Record it again, then Retrain." : "Could not delete the session");
+  loadTrainSessions();
+});
+$("train-condition").addEventListener("change", (e) => { if (e.target.value === "walking") $("train-speak").checked = true; });
+
+// spoken prompts (browser speech, offline voices of the OS) - needed when you can't watch the screen
+let lastSpoken = "";
+function speak(text) {
+  if (!$("train-speak").checked || !("speechSynthesis" in window) || !text || text === lastSpoken) return;
+  lastSpoken = text;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(" - now!", ", now!"));
+  u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+
+function showTrainIntro() {
+  loadTrainSessions();
+  $("train-overlay").hidden = false;
+  $("train-intro").hidden = false;
+  $("train-prompt").hidden = true;
+  $("train-progress-bar").hidden = true;
+  $("train-cancel").hidden = true;
+  $("train-close").hidden = false;
+  $("train-count").textContent = "";
+  $("train-step").textContent = "Train the triple-blink detector";
+}
+
+const pct = (x) => (x == null ? "–" : Math.round(x * 100) + " %");
+function trainReport(r) {
+  const row = (name, m) => `<tr><td>${name}</td><td>${m.caught}/${m.prompts} (${pct(m.recall)})</td>
+    <td>${m.false_triggers} (${m.false_per_min ?? "–"}/min)</td></tr>`;
+  const dec = r.decision || {};
+  const better = Boolean(dec.ml_clearly_better);
+  const tp = r.tp_observation || {};
+  const tpRows = Object.entries(tp).map(([c, v]) =>
+    `<tr><td>${c.replace("_", " ")}</td><td>${v.n}</td><td>${v.tp_corr.toFixed(2)}</td><td>${v.tp_at_peak.toFixed(2)}×</td></tr>`).join("");
+  return `<div class="row"><b>${r.sessions.length} session(s), ${r.minutes} min</b> · examples:
+      ${Object.entries(r.class_counts).map(([k, v]) => `${k.replace("_", " ")} ${v}`).join(", ")}</div>
+    <div class="row"><b>Held-out test</b> <span class="muted">(${r.cv})</span>
+      <table class="train-table"><tr><th></th><th>Triple blinks caught</th><th>False triggers</th></tr>
+        ${r.rule_old ? row("Rule, forehead (before)", r.rule_old) : ""}${row("Rule, your blink pattern", r.rule)}${r.ml_real ? row("ML, real data only", r.ml_real) : ""}${row("ML, real + synthetic", r.ml)}</table>
+      <b>Is ML necessary?</b> ${dec.answer ? escapeHtml(dec.answer) : "–"}
+      <span class="muted">(${dec.final ? "final" : "preliminary, still missing: " + escapeHtml((dec.missing_protocols || []).join("; "))})</span><br>
+      ${better ? "✅ Auto uses the ML classifier." : "Auto uses the rule on your learned blink pattern."}
+      <span class="muted">Full report: <code>.\\bayn blink decide</code> → docs/BLINK_DECISION.md</span></div>
+    <div class="row"><b>TP9/TP10 vs forehead</b> <span class="muted">(median correlation, TP size at the forehead peak)</span>
+      <table class="train-table"><tr><th>class</th><th>n</th><th>corr</th><th>TP at peak</th></tr>${tpRows}</table></div>`;
+}
+
+function renderTraining(m) {
+  const ov = $("train-overlay");
+  if (m.state === "cancelled") { ov.hidden = true; return; }
+  ov.hidden = false;
+  $("train-intro").hidden = true;
+  const prompt = $("train-prompt");
+  prompt.hidden = false;
+  prompt.textContent = m.prompt || "";
+  prompt.classList.toggle("do", m.step === "do");
+  prompt.classList.toggle("pause", m.step === "pause");
+  const running = m.state === "running";
+  $("train-progress-bar").hidden = !running && m.state !== "saved";
+  $("train-progress").style.width = ((m.progress || 0) * 100) + "%";
+  $("train-cancel").hidden = !running;
+  $("train-close").hidden = running || m.state === "saved";
+  $("train-step").textContent = running
+    ? `${PROTOCOL_NAMES[m.protocol] || "Standard"} session (${m.condition || "seated"}) · prompt ${m.prompts_done} of ${m.prompts_total}`
+    : m.state === "saved" ? `Session saved (${m.sessions} in total)` : "Train the triple-blink detector";
+  if (running && m.step === "do") beep([660], 0.15);
+  if (running && m.step !== "rest") speak(m.prompt);
+  clearInterval(trainTimer);
+  if (running && m.step_ends_at) {
+    const tick = () => { $("train-count").textContent = Math.max(0, m.step_ends_at - Date.now() / 1000).toFixed(0) + " s"; };
+    tick(); trainTimer = setInterval(tick, 250);
+  } else {
+    $("train-count").textContent = "";
+  }
+  $("train-result").innerHTML = m.state === "trained" ? trainReport(m.report)
+    : m.state === "train_failed" ? `<div class="row">⚠️ ${escapeHtml(m.prompt)}</div>` : "";
 }
 
 // ------------------------------------------------------------------ events: banner + timeline
@@ -286,7 +398,7 @@ function renderTimeline() {
       ? `<a href="/api/events/${m.id}/eeg.csv" download>EEG .csv</a> <a href="/api/events/${m.id}/eeg.npz" download>.npz</a>` : "")
       + (tr ? ` <a href="/api/events/${m.id}/transcript.txt" download>🗣 transcript (${tr.n_segments})</a>` : "")
       + (m.summary ? ` <a href="/api/events/${m.id}/summary.md" download>📝 summary</a>` : "");
-    const detail = m.info && m.info.gap_s ? ` · gap ${m.info.gap_s}s` : "";
+    const detail = !m.info ? "" : m.info.gaps_s ? ` · gaps ${m.info.gaps_s.join(" / ")} s` : m.info.p != null ? ` · ML P = ${m.info.p}` : m.info.gap_s ? ` · gap ${m.info.gap_s}s` : "";
     return `<li>
       <div class="tl-head"><b>${m.label}${SOURCE_TEXT[m.source] || ""}</b><time>${fmtTime(m.t)}</time></div>
       <div class="tl-meta">
@@ -325,7 +437,7 @@ function renderCalibration(m) {
   const running = m.state === "running";
   $("cal-cancel").hidden = !running;
   $("cal-close").hidden = running;
-  const label = { clench: "Jaw clench", double_blink: "Double blink" };
+  const label = { clench: "Jaw clench", triple_blink: "Triple blink" };
   $("cal-step").textContent = running
     ? (m.step === "rest" ? "Step 1: resting level" : `${label[m.gesture] || ""}: ${m.rep} of ${m.reps}`)
     : "Calibration";
@@ -541,6 +653,12 @@ function connect(delay = 500) {
       case "event": onEvent(m); break;
       case "event_done": onEventDone(m); break;
       case "calibration": renderCalibration(m); break;
+      case "training":
+        if (m.state === "trained" || m.state === "train_failed") {
+          if (!$("train-overlay").hidden) renderTraining(m);       // replayed results don't pop up on reload
+          else if (m.state === "trained" && (Date.now() / 1000 - m.t) < 10) toast("Blink detector trained");
+        } else renderTraining(m);
+        break;
       case "event_history":
         for (const e of m.events) events.set(e.id, e);
         renderTimeline();
@@ -590,6 +708,17 @@ $("sum-language").addEventListener("change", (e) => post("/api/summary/language"
 $("btn-calibrate").addEventListener("click", () => post("/api/events/calibration", { action: "start" }));
 $("cal-cancel").addEventListener("click", () => post("/api/events/calibration", { action: "cancel" }));
 $("cal-close").addEventListener("click", () => { $("cal-overlay").hidden = true; });
+$("btn-train").addEventListener("click", showTrainIntro);
+document.querySelectorAll("[data-protocol]").forEach((b) => b.addEventListener("click",
+  () => post("/api/events/training", { action: "start", protocol: b.dataset.protocol,
+                                       condition: $("train-condition").value })));
+$("train-retrain").addEventListener("click", () => {
+  post("/api/events/training", { action: "retrain" });
+  renderTraining({ state: "saved", prompt: "Training the detector on the saved sessions...", sessions: "all" });
+});
+$("train-cancel").addEventListener("click", () => post("/api/events/training", { action: "cancel" }));
+$("train-close").addEventListener("click", () => { $("train-overlay").hidden = true; });
+$("blink-method").addEventListener("change", (e) => post("/api/events/blink_method", { method: e.target.value }));
 $("btn-sound").addEventListener("click", () => {
   sound.on = !sound.on;
   try { localStorage.setItem("bayn.sound", sound.on ? "on" : "off"); } catch (e) { /* ignore */ }

@@ -6,8 +6,20 @@ Signal model per channel (µV):
   + random natural single blinks (AF7/AF8) and weak muscle bursts (distractors)
 Injectable gestures:
   clench        1.5-2 s broadband 30-110 Hz EMG burst, strong on TP9/TP10
-  double_blink  two large blink deflections 0.35-0.5 s apart on AF7/AF8
-  blink         one natural-size blink (should NOT trigger the double-blink detector)
+  triple_blink  three large blink deflections 0.35-0.5 s apart on AF7/AF8 (the trigger)
+  double_blink  two of them (must NOT trigger the triple-blink detector)
+  blink         one natural-size blink (must not trigger either)
+Artefacts that must not trigger anything (Phase 6, the ML blink detector learns to reject them):
+  head_turn     slow electrode-motion drift on all channels, a sharp "pop" on the forehead, neck EMG
+  nod           nodding "yes" 2-3 times: blink-like but wider humps ~0.5 s apart, large on TP9/TP10 too
+                (three nods = the classic false triple blink), plus neck EMG
+  look_side     horizontal eye movement: AF7 and AF8 move in OPPOSITE directions and hold
+  talk          a few seconds of jaw EMG bursts (strong on TP9/TP10) with small slow jaw artefacts
+
+Blinks also appear, smaller, on TP9/TP10 (`tp_blink_coupling`): the user saw a synchronised TP9/TP10
+peak when blinking on the real headset. In the first real recordings (Phase 3 event windows) it was
+weakly positive (correlation with the forehead +0.1 to +0.3); labelled sessions measure it properly
+(`python -m bayn.events.blink_ml inspect`).
 """
 
 from __future__ import annotations
@@ -35,11 +47,12 @@ class SimulatedEEG:
 
     def __init__(self, channels: list[str], fs: float = 256.0, seed: int | None = None,
                  mains_hz: float = 50.0, natural_blinks: bool = True, natural_emg: bool = True,
-                 background_uv: float = 10.0) -> None:
+                 background_uv: float = 10.0, tp_blink_coupling: float = 0.2) -> None:
         self.channels = list(channels)
         self.fs = float(fs)
         self.n_ch = len(self.channels)
         self.mains_hz = mains_hz
+        self.tp_blink_coupling = tp_blink_coupling
         self.natural_blinks = natural_blinks
         self.natural_emg = natural_emg
         self.rng = np.random.default_rng(seed)
@@ -76,8 +89,88 @@ class SimulatedEEG:
         peak = 0.10
         shape = np.where(t < peak, np.exp(-0.5 * ((t - peak) / 0.035) ** 2),
                          np.exp(-0.5 * ((t - peak) / 0.075) ** 2))
-        w = np.where(self._is_front, 1.0, -0.12)[:, None] * amp_uv * shape[None, :]
+        w = np.where(self._is_front, 1.0, self.tp_blink_coupling)[:, None] * amp_uv * shape[None, :]
         return w * self.rng.uniform(0.85, 1.0, self.n_ch)[:, None]
+
+    def _hump(self, dur_s: float) -> np.ndarray:
+        """Smooth bump of the given length (Hann window)."""
+        return np.hanning(max(3, int(dur_s * self.fs)))
+
+    def _side_sign(self) -> np.ndarray:
+        """+1 for left-side sensors (TP9, AF7), -1 for right-side (AF8, TP10)."""
+        return np.array([1.0 if c in ("TP9", "AF7") else -1.0 for c in self.channels])
+
+    def _head_turn(self) -> np.ndarray:
+        n = int(self.rng.uniform(1.0, 1.6) * self.fs)
+        drift = self._hump(n / self.fs)[None, :] * self.rng.uniform(-180, 180, self.n_ch)[:, None]
+        ov = drift + self._emg_burst(n / self.fs, self.rng.uniform(15, 30), self.rng.uniform(4, 8))
+        if self.rng.random() < 0.7:                      # electrode "pop": sharp, blink-sized, one forehead side
+            pop = self._hump(self.rng.uniform(0.12, 0.25))
+            ch = int(self.rng.choice(np.flatnonzero(self._is_front))) if self._is_front.any() else 0
+            at = int(self.rng.uniform(0.1, 0.5) * n)
+            ov[ch, at:at + len(pop)] += self.rng.choice([-1, 1]) * self.rng.uniform(120, 250) * pop[:n - at]
+        return ov
+
+    def _nod(self) -> np.ndarray:
+        """Nodding "yes" 2-3 times: humps wider than blinks, large on every channel (motion + vertical EOG)."""
+        k = int(self.rng.choice([2, 3]))
+        starts = np.concatenate([[0], np.cumsum(self.rng.uniform(0.45, 0.7, k - 1) * self.fs)]).astype(int)
+        humps = [self._hump(self.rng.uniform(0.3, 0.45)) for _ in range(k)]
+        n = starts[-1] + len(humps[-1])
+        gain = np.where(self._is_front, 1.0, self.rng.uniform(0.6, 1.1, self.n_ch))
+        gain *= self.rng.choice([-1.0, 1.0]) if self.rng.random() < 0.3 else 1.0
+        amp = self.rng.uniform(140, 240)
+        ov = np.zeros((self.n_ch, n))
+        for s, w in zip(starts, humps):
+            ov[:, s:s + len(w)] += gain[:, None] * amp * self.rng.uniform(0.8, 1.1) * w[None, :]
+        return ov + self._emg_burst(n / self.fs, self.rng.uniform(10, 25), self.rng.uniform(3, 6))
+
+    def _look_side(self) -> np.ndarray:
+        """Saccade, hold, saccade back: AF7/AF8 opposite, TP9/TP10 opposite and smaller."""
+        hold = int(self.rng.uniform(0.5, 1.0) * self.fs)
+        edge = int(0.05 * self.fs)
+        step = np.concatenate([np.linspace(0, 1, edge), np.ones(hold), np.linspace(1, 0, edge)])
+        gain = self._side_sign() * np.where(self._is_front, 1.0, 0.35) * self.rng.choice([-1.0, 1.0])
+        return gain[:, None] * self.rng.uniform(60, 120) * step[None, :]
+
+    def _squeeze(self) -> np.ndarray:
+        """Eyes squeezed shut ~1 s: one long, large blink-like deflection plus frontal muscle activity."""
+        n = int(self.rng.uniform(0.8, 1.3) * self.fs)
+        hump = self._hump(n / self.fs)
+        gain = np.where(self._is_front, 1.0, self.tp_blink_coupling)
+        return gain[:, None] * self.rng.uniform(200, 320) * hump[None, :]             + self._emg_burst(n / self.fs, self.rng.uniform(8, 15), self.rng.uniform(20, 35))
+
+    def _look_updown(self) -> np.ndarray:
+        """Vertical eye movement: forehead sensors step together (like a slow blink), up then down."""
+        hold = int(self.rng.uniform(0.4, 0.8) * self.fs)
+        edge = int(0.06 * self.fs)
+        step = np.concatenate([np.linspace(0, 1, edge), np.ones(hold), np.linspace(1, -1, 2 * edge),
+                               -np.ones(hold), np.linspace(-1, 0, edge)])
+        gain = np.where(self._is_front, 1.0, self.tp_blink_coupling)
+        return gain[:, None] * self.rng.uniform(80, 150) * step[None, :]
+
+    def _eyebrows(self) -> np.ndarray:
+        """Raising the eyebrows twice: frontal muscle bursts and small electrode shifts on the forehead."""
+        n = int(self.rng.uniform(1.2, 1.8) * self.fs)
+        ov = np.zeros((self.n_ch, n))
+        for start in (0, n // 2):
+            b = self._emg_burst(self.rng.uniform(0.25, 0.4), self.rng.uniform(5, 10), self.rng.uniform(20, 40))
+            ov[:, start:start + b.shape[1]] += b[:, :n - start]
+            hump = self._hump(0.35)
+            ov[:, start:start + len(hump)] += np.where(self._is_front, 1.0, 0.1)[:, None]                 * self.rng.uniform(40, 90) * hump[None, :n - start]
+        return ov
+
+    def _talk(self) -> np.ndarray:
+        n = int(self.rng.uniform(3.0, 5.0) * self.fs)
+        ov = np.zeros((self.n_ch, n))
+        t = 0
+        while t < n - int(0.3 * self.fs):                # syllable-like jaw EMG bursts
+            d = self.rng.uniform(0.15, 0.4)
+            b = self._emg_burst(d, self.rng.uniform(12, 30), self.rng.uniform(3, 8))
+            ov[:, t:t + b.shape[1]] += b[:, :n - t]
+            t += b.shape[1] + int(self.rng.uniform(0.05, 0.3) * self.fs)
+        jaw = np.sin(2 * np.pi * self.rng.uniform(2.0, 4.0) * np.arange(n) / self.fs)
+        return ov + np.where(self._is_temp, 15.0, 6.0)[:, None] * jaw[None, :]
 
     def _emg_burst(self, dur_s: float, temporal_uv: float, frontal_uv: float) -> np.ndarray:
         n = int(dur_s * self.fs)
@@ -108,14 +201,19 @@ class SimulatedEEG:
             if gesture == "clench":
                 ov = self._emg_burst(self.rng.uniform(1.5, 2.0), self.rng.uniform(35, 55),
                                      self.rng.uniform(8, 14))
-            elif gesture == "double_blink":
-                gap = int(self.rng.uniform(0.35, 0.5) * self.fs)
-                b1, b2 = self._blink_wave(self.rng.uniform(170, 230)), self._blink_wave(self.rng.uniform(170, 230))
-                ov = np.zeros((self.n_ch, gap + b2.shape[1]))
-                ov[:, :b1.shape[1]] += b1
-                ov[:, gap:gap + b2.shape[1]] += b2
-            else:  # single natural blink
+            elif gesture in ("double_blink", "triple_blink", "four_blinks"):
+                n = {"double_blink": 2, "triple_blink": 3, "four_blinks": 4}[gesture]
+                starts = np.concatenate([[0], np.cumsum(self.rng.uniform(0.35, 0.5, n - 1) * self.fs)]).astype(int)
+                waves = [self._blink_wave(self.rng.uniform(170, 230)) for _ in range(n)]
+                ov = np.zeros((self.n_ch, starts[-1] + waves[-1].shape[1]))
+                for s, w in zip(starts, waves):
+                    ov[:, s:s + w.shape[1]] += w
+            elif gesture == "blink":  # single natural blink
                 ov = self._blink_wave(self.rng.uniform(80, 140))
+            else:
+                ov = {"head_turn": self._head_turn, "nod": self._nod, "look_side": self._look_side,
+                      "talk": self._talk, "squeeze": self._squeeze, "look_updown": self._look_updown,
+                      "eyebrows": self._eyebrows}[gesture]()
             return self._schedule(ov, d)
 
     def generate(self, n: int) -> np.ndarray:
@@ -204,8 +302,8 @@ class SimulatedSource(EEGSource):
             self._auto_idx += 1
             self._next_auto += self.auto.every_s
 
-    def inject(self, gesture: str) -> float | None:
-        start = self.gen.inject(gesture)
+    def inject(self, gesture: str, delay_s: float = 0.05) -> float | None:
+        start = self.gen.inject(gesture, delay_s)
         onset = self._t_start + start / self.fs
         self.injected.append((gesture, onset))
         return onset

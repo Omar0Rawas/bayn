@@ -63,6 +63,7 @@ def running_stack(tmp_path):
                BAYN_EVENTS__CALIBRATION__REST_S="5", BAYN_EVENTS__CALIBRATION__REPS="2",
                BAYN_EVENTS__CALIBRATION__READY_S="1", BAYN_EVENTS__CALIBRATION__DO_S="3",
                BAYN_EVENTS__CALIBRATION__RELEASE_S="1.5",
+               BAYN_EVENTS__TRAINING__SCALE="0.1",          # ~30 s instead of ~5 min
                BAYN_DATA_DIR=str(tmp_path))
     modules = ["bayn.eeg.bridge", "bayn.events.service", "bayn.ui.server"]
     if TINY_READY:
@@ -103,7 +104,7 @@ def test_end_to_end_simulated_pipeline(running_stack):
                     if not injected_sent and m["connected"]:
                         req = urllib.request.Request(
                             f"http://127.0.0.1:{ui}/api/sim/inject", method="POST",
-                            data=json.dumps({"gesture": "double_blink"}).encode(),
+                            data=json.dumps({"gesture": "triple_blink"}).encode(),
                             headers={"Content-Type": "application/json"})
                         assert urllib.request.urlopen(req).status == 202
                         injected_sent = True
@@ -121,7 +122,7 @@ def test_end_to_end_simulated_pipeline(running_stack):
     assert [q["channel"] for q in st["quality"]] == ["TP9", "AF7", "AF8", "TP10"]
     assert all(q["level"] in ("good", "ok") for q in st["quality"])
     assert st["mains_hz"] == 60                                 # detected, not assumed
-    assert seen["injected"]["ok"] and seen["injected"]["gesture"] == "double_blink"
+    assert seen["injected"]["ok"] and seen["injected"]["gesture"] == "triple_blink"
     b = seen["bands"]                                           # brainwave panel data, ~2 Hz
     assert seen["types"]["bands"] >= 8
     assert list(b["bands"]) == ["delta", "theta", "alpha", "beta", "gamma"]
@@ -207,6 +208,43 @@ def test_guided_calibration_with_simulator(running_stack):
     final = cal[-1]
     assert final["state"] == "done", final
     assert final["results"]["clench"]["quality"] == "good"
+
+
+def test_blink_training_session_with_simulator(running_stack, tmp_path):
+    """Phase 6 end to end: the dashboard starts a labelled recording, the simulator performs the
+    prompts, the session is saved and the classifier is trained in the background."""
+    ui = running_stack
+    sent = {}
+
+    def actions(m):
+        if m["type"] == "trigger_status" and m.get("sim") and not sent:
+            sent["x"] = True
+            assert _post(ui, "/api/events/gesture", {"gesture": "triple_blink"}) == 202
+            assert _post(ui, "/api/events/training", {"action": "start", "protocol": "standard"}) == 202
+
+    done = lambda ms: any(m["type"] == "training" and m["state"] in ("trained", "train_failed", "failed") for m in ms)
+    msgs = asyncio.run(_collect(ui, done, 90, actions))
+    tr = [m for m in msgs if m["type"] == "training"]
+    running = [m for m in tr if m["state"] == "running"]
+    assert {m["label"] for m in running} >= {"triple_blink", "double_blink", "blink", "nod", "head_turn", "look_side"}
+    saved = [m for m in tr if m["state"] == "saved"][0]
+    assert Path(saved["path"]).exists() and str(tmp_path) in saved["path"]
+    assert any(m["type"] == "trigger_status" and m["state"] == "training" for m in msgs)
+    final = tr[-1]
+    # a 30-second session is enough to exercise the pipeline; the model only counts as trained when
+    # the examples suffice, so either outcome is a working pipeline - but it must report one
+    assert final["state"] in ("trained", "train_failed"), final
+    if final["state"] == "trained":
+        assert {"rule", "ml", "tp_observation"} <= set(final["report"])
+        assert (tmp_path / "models" / "blink-default-sim.joblib").exists()
+    listed = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{ui}/api/events/training/sessions").read())
+    assert [s["id"] for s in listed["sessions"]] == [saved["id"]] and listed["sessions"][0]["condition"] == "seated"
+    assert _post(ui, "/api/events/training/delete", {"id": saved["id"]}) == 200
+    assert not Path(saved["path"]).exists()
+    assert _post(ui, "/api/events/blink_method", {"method": "rule"}) == 202
+    with pytest.raises(urllib.error.HTTPError) as e:
+        _post(ui, "/api/events/training", {"action": "jump"})
+    assert e.value.code == 400
 
 
 @pytest.mark.skipif(not TINY_READY, reason="run `bayn models` (needs tiny)")

@@ -45,17 +45,18 @@ def test_clench_raises_emg_on_temporal_channels(gen):
     assert np.all(burst[tp] > burst[[1, 2]])              # temporal > frontal
 
 
-def test_double_blink_gives_two_frontal_peaks(gen):
+@pytest.mark.parametrize("gesture,n", [("double_blink", 2), ("triple_blink", 3)])
+def test_blink_series_give_frontal_peaks(gen, gesture, n):
     from scipy.signal import find_peaks
 
     gen.generate(int(FS * 2))
-    gen.inject("double_blink", delay_s=0.2)
-    x = gen.generate(int(FS * 2))
+    gen.inject(gesture, delay_s=0.2)
+    x = gen.generate(int(FS * 2.5))
     y = StreamingFilter(FS, 4, band=(0.5, 10), notch="off").process(x)
     for ch in (1, 2):                                      # AF7, AF8
         peaks, _ = find_peaks(y[ch], height=80, distance=int(0.2 * FS))
-        assert len(peaks) == 2, peaks
-        assert 0.3 <= (peaks[1] - peaks[0]) / FS <= 0.55
+        assert len(peaks) == n, peaks
+        assert all(0.3 <= g / FS <= 0.55 for g in np.diff(peaks))
 
 
 def test_unknown_gesture_rejected(gen):

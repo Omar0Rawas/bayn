@@ -1,6 +1,6 @@
 """The Detector interface: anything that can decide "an event happened" from EEG.
 
-Today: deliberate gestures (jaw clench, double blink) and a manual button.
+Today: deliberate gestures (jaw clench, triple blink) and a manual button.
 Later: a real seizure detector implements the same interface and is dropped in
 via config, without touching the event manager, storage, UI or pipeline.
 """
@@ -32,11 +32,13 @@ class CalibrationResult:
     separation: float          # gesture_level / rest_level
     quality: str               # good | weak | failed
     message: str = ""
+    space: str = ""            # signal the threshold applies to (blink detector: which channel weights)
 
     def to_dict(self) -> dict:
-        return {"threshold": self.threshold, "rest_level": self.rest_level,
-                "gesture_level": self.gesture_level, "separation": self.separation,
-                "quality": self.quality, "message": self.message}
+        d = {"threshold": self.threshold, "rest_level": self.rest_level,
+             "gesture_level": self.gesture_level, "separation": self.separation,
+             "quality": self.quality, "message": self.message}
+        return {**d, "space": self.space} if self.space else d
 
 
 class Detector(ABC):

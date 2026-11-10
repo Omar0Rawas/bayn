@@ -101,9 +101,9 @@ def test_manual_only_mode_ignores_gestures(tmp_path):
 
 def test_set_gesture_at_runtime(tmp_path):
     mgr = _mgr(tmp_path, post_s=3)
-    mgr.set_gesture("double_blink")
-    onsets, out = _drive(mgr, 25, gesture="double_blink", n=1)
-    assert [e["detector"] for e in _topics(out, TOPIC_EVENT)] == ["double_blink"]
+    mgr.set_gesture("triple_blink")
+    onsets, out = _drive(mgr, 25, gesture="triple_blink", n=1)
+    assert [e["detector"] for e in _topics(out, TOPIC_EVENT)] == ["triple_blink"]
 
 
 # ---------------------------------------------------------------- calibration
@@ -121,7 +121,7 @@ def _calibrate(tmp_path, gesture, seconds=45):
     return mgr, out
 
 
-@pytest.mark.parametrize("gesture", ["clench", "double_blink"])
+@pytest.mark.parametrize("gesture", ["clench", "triple_blink"])
 def test_guided_calibration_end_to_end(tmp_path, gesture):
     mgr, out = _calibrate(tmp_path, gesture)
     cal = _topics(out, TOPIC_CALIBRATION)

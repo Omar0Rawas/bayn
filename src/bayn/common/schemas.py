@@ -17,6 +17,7 @@ TOPIC_EVENTS_STATUS = "events.status"        # ~4 Hz: armed/cooldown, detector l
 TOPIC_EVENT = "events.event"                 # an event fired (recording its post window)
 TOPIC_EVENT_DONE = "events.done"             # EEG window saved + stats ready -> starts transcript/summary
 TOPIC_CALIBRATION = "events.calibration"     # calibration prompts, progress, result
+TOPIC_TRAINING = "events.training"           # blink-detector training session: prompts, saved, trained
 
 TOPIC_AUDIO_PCM = "audio.pcm"                # 16 kHz mono int16 chunks
 TOPIC_AUDIO_LEVEL = "audio.level"            # ~10 Hz mic level (dBFS)
@@ -32,7 +33,8 @@ TOPIC_SUMMARY_STATUS = "summary.status"      # Ollama reachable, model, last spe
 
 AUDIO_SR = 16000                             # Whisper's sample rate
 
-GESTURES = ("clench", "double_blink", "blink")
+GESTURES = ("clench", "triple_blink", "double_blink", "blink", "four_blinks", "squeeze",
+            "head_turn", "nod", "look_side", "look_updown", "eyebrows", "talk")  # all but the first two must NOT trigger
 
 
 @dataclass(slots=True)

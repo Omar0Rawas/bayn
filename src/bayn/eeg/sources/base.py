@@ -40,7 +40,7 @@ class EEGSource(ABC):
     @abstractmethod
     def stop(self) -> None: ...
 
-    def inject(self, gesture: str) -> float | None:
+    def inject(self, gesture: str, delay_s: float = 0.05) -> float | None:
         """Simulator-only: schedule a fake gesture. Returns its onset time (unix s) or None."""
         return None
 

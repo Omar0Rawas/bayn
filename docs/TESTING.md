@@ -5,7 +5,7 @@ This document describes how Bayn is verified: which tests exist at each level (u
 > [!IMPORTANT]
 > Bayn is a hackathon prototype, **not a medical device**. "Validation" here means *engineering* verification and validation: does the software do what the design says, on real hardware, reliably enough for a live demo? **No clinical validation has been done, and none is claimed.**
 
-**Status:** Phases 1–5 tested, including the user's live-mic check of Phase 5 summaries in the dashboard. The **model benchmark** (between Phases 5 and 6) compared 6 Whisper models × 11 summary LLMs on the user's 12 recorded corpus scripts, on the dev PC's GPU and on an emulated 4-thread CPU laptop ([BENCHMARK.md](BENCHMARK.md)). The default summary model is now Gemma 4 E2B. **The best demo configuration will be re-tested on the demo laptop**, with its own microphone. On the real headset the jaw-clench trigger works; the rule-based double blink does not yet (finding F1, ML fix planned for Phase 6). Phases 6–8 have test plans with acceptance criteria, filled in as each phase lands.
+**Status:** Phases 1–5 tested, including the user's live-mic check of Phase 5 summaries in the dashboard. The **model benchmark** (between Phases 5 and 6) compared 6 Whisper models × 11 summary LLMs on the user's 12 recorded corpus scripts, on the dev PC's GPU and on an emulated 4-thread CPU laptop ([BENCHMARK.md](BENCHMARK.md)). The default summary model is now Gemma 4 E2B. **The best demo configuration will be re-tested on the demo laptop**, with its own microphone. On the real headset the jaw-clench trigger works; the rule-based double blink does not yet (finding F1). **Phase 6** switched the trigger to a **triple blink** (user's choice) and built an EEG-only ML detector (verified in simulation; the user's labelled headset sessions are next). Phases 7–8 have test plans with acceptance criteria, filled in as each phase lands.
 Last updated: 2026-11-10.
 
 ---
@@ -28,13 +28,13 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 
 | Level | Purpose | Location | Count | Runtime | Runs |
 |---|---|---|---|---|---|
-| **Unit** | One function or class in isolation. No sockets, threads, devices or ML models. Detector and event-manager tests stream minutes of simulated EEG through the logic offline, in seconds. The segmenter uses a simple energy VAD stand-in. | `tests/test_filters.py`, `test_buffer_quality.py`, `test_simulator.py`, `test_bands.py`, `test_detectors.py`, `test_events_manager.py`, `test_transcription_unit.py`, `test_transcription_eval.py`, `test_summarization.py`, `test_corpus.py`, `test_benchmark.py`, parts of `test_bus_config.py` and `test_sources.py` | 151 | ~30 s | Every `test` run |
-| **Integration** | Several components together across real boundaries: TCP sockets, threads, asyncio, BrainFlow's native library (synthetic board), LSL networking, real Silero VAD + Whisper models, Ollama API (fake server; real model when running), the benchmark's LLM stage and report. | `test_bus_config.py`, `test_sources.py`, `test_transcription_models.py`, `test_transcription_eval.py`, `test_summarization.py`, `test_benchmark.py` | 18 | ~30 s | Every `test` run |
-| **System** | The real `bridge`, `events`, `audio`, `transcriber`, `summarizer` and `dashboard` *processes*, end to end, driven like a browser would (WebSocket + REST). Simulated EEG, WAV audio. | `tests/test_system.py` | 6 | ~60 s | Every `test` run |
+| **Unit** | One function or class in isolation. No sockets, threads, devices or ML models. Detector and event-manager tests stream minutes of simulated EEG through the logic offline, in seconds. The segmenter uses a simple energy VAD stand-in. | `tests/test_filters.py`, `test_buffer_quality.py`, `test_simulator.py`, `test_bands.py`, `test_detectors.py`, `test_events_manager.py`, `test_transcription_unit.py`, `test_transcription_eval.py`, `test_summarization.py`, `test_corpus.py`, `test_benchmark.py`, `test_blink_ml.py`, parts of `test_bus_config.py` and `test_sources.py` | 165 | ~40 s | Every `test` run |
+| **Integration** | Several components together across real boundaries: TCP sockets, threads, asyncio, BrainFlow's native library (synthetic board), LSL networking, real Silero VAD + Whisper models, Ollama API (fake server; real model when running), the benchmark's LLM stage and report. | `test_bus_config.py`, `test_sources.py`, `test_transcription_models.py`, `test_transcription_eval.py`, `test_summarization.py`, `test_benchmark.py`, `test_blink_ml.py` | 22 | ~30 s | Every `test` run |
+| **System** | The real `bridge`, `events`, `audio`, `transcriber`, `summarizer` and `dashboard` *processes*, end to end, driven like a browser would (WebSocket + REST). Simulated EEG, WAV audio. | `tests/test_system.py` | 7 | ~60 s | Every `test` run |
 | **Hardware-in-the-loop** | The real Muse 2 over Bluetooth, through both acquisition paths. | `tests/test_hardware.py` | 2 | ~45 s | On demand, with headset |
 | **Manual acceptance** | A human checks the dashboard, ergonomics and demo flow against a checklist. | §4 (per phase), §6 | – | minutes | End of each phase |
 
-### 2.1 Unit tests (151)
+### 2.1 Unit tests (165)
 
 | Area | Test | Verifies |
 |---|---|---|
@@ -63,7 +63,7 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 | | `test_seizure_stub_never_fires`, `test_factory_follows_gesture_setting` | stub is inert; `events.gesture` selects detectors; invalid gesture rejected |
 | Detectors: clench | `test_clench_detection_rate_and_onset_accuracy` | 30 injected clenches over 3 seeds (50 and 60 Hz mains): ≥ 95 % detected, 0 false, onset error ≤ 0.5 s |
 | | `test_clench_needs_hold_time`, `test_clench_fires_once_per_clench` | bursts shorter than `hold_s` never fire; one clench = one detection |
-| Detectors: double blink | `test_double_blink_detection_rate` | 30 injected double blinks over 3 seeds, natural blinks + muscle bursts on: ≥ 90 % detected, 0 false |
+| Detectors: triple blink | `test_triple_blink_detection_rate`, `test_single_and_double_blinks_do_not_fire`, `test_blink_count_is_configurable` | 30 injected triple blinks over 3 seeds, natural blinks + muscle bursts on: ≥ 90 % detected, 0 false; single and double blinks never fire; N is a setting (until 2026-11-10 the trigger was a double blink) |
 | | `test_single_blinks_do_not_fire`, `test_rebound_is_not_a_third_blink` | single blinks ignored; regression for D9 |
 | False triggers | `test_no_false_triggers_in_10_minutes_of_distractors[clench/double_blink]` | 10 min of natural blinks and short muscle bursts, no deliberate gesture: ≤ 1 trigger |
 | | `test_gestures_dont_cross_trigger` | clenches never fire the blink detector and vice versa |
@@ -96,8 +96,9 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 | Sources | `test_sample_clock_regularises_jitter` | ±20 ms packet jitter → perfectly regular timeline |
 | | `test_sample_clock_reanchors_after_gap` | a 4 s dropout re-anchors the clock |
 | | `test_unknown_brainflow_board_rejected` | invalid board name raises |
+| Triple blink / ML (Phase 6) | `test_blink_ml.py` (unit part), `test_detectors.py` | simulator artefacts (nod, head turn, glance, talking) and the TP9/TP10 blink coupling; the rule false-triggers on nods (F1 reproduced); protocol prompt counts and length; session save/load; finder groups a double blink into one episode; features finite and **identical offline and live**; labels follow the prompts; rule fallback; the event manager records a session without firing events |
 
-### 2.2 Integration tests (16)
+### 2.2 Integration tests (22)
 
 | Test | Components | Verifies |
 |---|---|---|
@@ -114,11 +115,12 @@ Hardware tests are skipped unless `BAYN_HARDWARE=1`. The LSL hardware test also 
 | `test_client_streams_tokens_and_reports_speed`, `test_client_error_and_unreachable`, `test_stalled_model_times_out_instead_of_hanging` | Ollama client ↔ fake Ollama server | streaming, JSON schema sent, error lines, unreachable host, stall timeout (D17) |
 | `test_service_summarises_window_streams_and_saves`, `test_service_handles_no_speech_and_llm_failure` | summarizer service ↔ fake Ollama + event store | en + ar streamed and saved, event row updated; no-speech path; failure + retry |
 | `test_real_model_summarises_the_english_classroom_scenario` | real Ollama model (skipped if not running) | ≥ 60 % facts, nothing invented, right language + format |
+| `test_ml_beats_the_rule_on_held_out_sessions`, `test_live_ml_detector_on_a_fresh_stream`, `test_auto_uses_ml_only_if_it_beat_the_rule`, `test_incompatible_model_is_rejected` | simulated recording sessions → features → random forest → live `MLBlinkDetector` | ML catches ≥ 85 % of triple blinks with no more false triggers/min than the rule; on a fresh stream full of nods and double blinks, no more false triggers than the rule; Auto only switches when the held-out test favours ML; models for other channel setups rejected (Phase 6) |
 | `test_evaluation_tool_scores_strategies_on_a_clip` | `bayn eval-stt` logic: VAD + Whisper + metrics | every requested strategy scored on the same utterances |
 
 The four Whisper tests are skipped if the `tiny` model isn't downloaded (`bayn models`).
 
-### 2.3 System tests (6)
+### 2.3 System tests (7)
 
 | Test | Verifies |
 |---|---|
@@ -127,6 +129,7 @@ The four Whisper tests are skipped if the `tiny` model isn't downloaded (`bayn m
 | `test_manual_trigger_and_hotkey` | `POST /api/events/trigger {source: hotkey}` → a `manual` event with source `hotkey` reaches the browser. |
 | `test_guided_calibration_with_simulator` | `POST /api/events/calibration` → prompts stream to the browser; the simulator performs each prompted clench; calibration ends `done` with quality `good`. |
 | `test_live_transcript_and_event_transcript` | All 6 processes (summarizer against a fake Ollama). The English test clip plays in a loop as the "microphone", with the tiny model on CPU. A transcript segment reaches the browser (`en`, contains "time", unix timestamps, latency < 5 s). A manual event fired during speech gets `transcript_window` with ≥ 1 segment. `transcript.txt` downloads. The event row in `/api/events` records the transcript. Status reports model/device and `audio_ok`. **Then the summary**: the prompt carries the transcript, text streams while writing, the final markdown has the summary and the code-written EEG section, and `summary.md` downloads. |
+| `test_blink_training_session_with_simulator` | Phase 6: `POST /api/events/training` starts a labelled recording (shortened ×0.1). Prompts for every gesture class stream to the browser, the simulator performs them, the trigger state shows `training`, the session is saved to disk, and training runs in the background and reports `trained` or "not enough examples". The blink method can be switched; a bad action gets HTTP 400. |
 | `test_bad_gesture_rejected` | The REST API rejects an invalid gesture with HTTP 400. |
 
 ### 2.4 Hardware-in-the-loop tests (2)
@@ -334,32 +337,111 @@ No model put a diagnosis into an incident summary, except one gemma3:1b summary.
 | Full benchmark on the dev PC | Manual | report generated | ✅ [BENCHMARK.md](BENCHMARK.md) |
 | Same benchmark on the demo laptop with its microphone (`--profiles cpu`, plus `gpu` if it has an NVIDIA GPU) | Manual | demo configuration chosen from its numbers | ⏳ laptop phase |
 
-### Phase 6: Gesture tuning on the real headset + ML blink detector (planned)
+### Phase 6: Triple-blink trigger + ML detector (EEG only) ✅ · decision: ML not necessary · ✅ user demo test
 
-**ML double-blink detector** (answers finding F1). One amplitude threshold can't separate natural blinks from head-movement artefacts, because their amplitudes overlap. The plan:
+**Goal** (answers finding F1): a blink trigger that ignores head movement, nods, sideways glances and talking, yet still catches natural-strength deliberate blinks. One amplitude threshold can't do that, because these artefacts are as large as blinks.
 
-1. **Guided labelled recording, about 3 min:** blink twice, blink once, turn head, nod, look left/right, talk, rest. Each prompt labels its time window. This is also the Muse-app-style onboarding.
-2. **Candidates:** every forehead peak above a *low* threshold. Features: shape/width, peak count and gap, AF7/AF8 symmetry, TP9/TP10 involvement, slow-drift and muscle-band energy.
-3. **Model:** a scikit-learn random forest with classes double blink / single blink / movement / other, saved per user. Runs offline on CPU.
-4. **Two variants, compared:** **EEG only**, which mirrors what a real future device may offer, and **EEG + Muse accelerometer**.
-5. **`MLDoubleBlinkDetector` behind the `Detector` interface**, with the rule-based detector as fallback. This is also the dry run for plugging in a seizure model.
+**Scope changes (user, 2026-11-10):**
+- **The trigger is THREE blinks**, not two. Double and single blinks are now near misses that must not fire. The number is a setting (`events.triple_blink.count`).
+- **EEG only.** No accelerometer variant, because the end device won't have one.
+- **The Muse-style onboarding was dropped.**
+- **The synchronised TP9/TP10 peak the user noticed when blinking** is measured and used as a feature.
 
-| Planned activity | Acceptance criterion |
-|---|---|
-| Labelled recording session completes and saves labelled windows | ≥ 20 double blinks, ≥ 20 single blinks, ≥ 20 movements per session |
-| Held-out evaluation (session-wise split): rule vs ML (EEG) vs ML (EEG + accel) | report precision, recall, false triggers/min, confusion matrix |
-| ML (EEG only) vs rule-based on the user's data | higher recall at ≤ the rule's false-trigger rate |
-| Simulator gains head-movement artefacts | the rule-based detector's false triggers are reproducible in tests; ML fixes them |
+**How it works** ([blinks.py](../src/bayn/events/detectors/blinks.py), [blink_ml.py](../src/bayn/events/blink_ml.py), [training.py](../src/bayn/events/training.py)):
+1. **Threshold rule (fallback):** exactly N blink peaks on AF7+AF8 (0.3–10 Hz), each 0.2–0.8 s after the previous one.
+   - Later blinks of a fast series ride on the previous blink's high-pass rebound, so they count by their **rise from the dip before them** (D24).
+   - A much weaker stray natural blink next to the series isn't counted.
+2. **Labelled recording sessions** in the dashboard (Event trigger → Blink detector → *Train…*). Each prompt labels its time window; recordings are saved to `data/training/<profile>-<source>/` and accumulate.
+   - **Standard** (~5.2 min): 12 triple blinks plus the things that must not fire: 8 double blinks, 6 single blinks, 8 head turns, 8 nods ("yes, yes, yes"), 8 sideways glances and 2 talking periods, in random order.
+   - **Noisy** (~4.4 min): talking, looking around, free head movement and natural sitting, with 16 triple-blink prompts *during* the activity. This is the robustness test.
+3. **Candidate finder:** a deliberately sensitive streaming peak finder on the forehead signal. Its threshold is 3 × the robust noise level, kept between 30 and 100 µV. Nearby peaks form an *episode*.
+4. **31 EEG features per episode:**
+   - Forehead: peak count and strong-peak count, both gaps between the three largest peaks, their relative sizes and widths, rebound.
+   - AF7/AF8: agreement (blinks) versus opposition (eye movements).
+   - **TP9/TP10 vs forehead:** correlation, size at the forehead peak, lag, TP9–TP10 agreement.
+   - Slow electrode drift (head movement).
+   - Muscle energy versus just before the episode (talking, neck).
+5. **Random forest per user** (scikit-learn, CPU, ~1 MB) with classes triple blink / blinks (one or two) / movement / other. It fires when P(triple blink) ≥ 0.5.
+6. **`MLBlinkDetector`** sits behind the `Detector` interface.
+   - `method: auto` uses the model only if it beat the rule on held-out data (≤ 5 points lower recall, no more false triggers/min); `ml` forces it; otherwise the rule runs.
+   - The finder and features run identically offline and live (tested).
+7. **Evaluation against the rule** on held-out data: leave one session out, or 4 time blocks within a single session. Metrics are triple-blink prompts caught and false triggers per minute, broken down by what the person was doing.
 
-Protocol, per tester, headset on, after calibration:
+**Results so far:**
 
-| Trial | Acceptance criterion |
-|---|---|
-| 20 deliberate jaw clenches, 20 deliberate double blinks | ≥ 18 / 20 detected for the chosen gesture |
-| 10 min normal activity: talking, chewing, normal blinking, head movement | ≤ 1 false trigger |
-| Gesture-to-event latency | ≤ 1.5 s |
-| Repeat with ≥ 2 people | criteria hold for each, using their own calibration |
-| Guided onboarding ("blink twice", "clench", "close your eyes", like the Muse app) | a first-time user completes it in < 2 min without help, and it produces a working calibration |
+| Data | Rule: caught · false triggers | ML: caught · false triggers |
+|---|---|---|
+| Simulator, 2 standard + 2 noisy sessions (19 min), leave one session out | 54/56 (96 %) · **1.08/min** (nodding three times 9, head movement 6) | 53/56 (95 %) · **0.34/min** |
+| Simulator, only 1 standard + 1 noisy session (9.6 min) | 26/28 (93 %) · 0.41/min | 23/28 (82 %) · 0.95/min: too little data, so Auto keeps the rule |
+| Simulator, fresh stream: 8 triple blinks among 7 nods, 3 double blinks, head turns, glances, talking | 8/8 · 2 nods fired | 8/8 · 1 false (a natural blink right before a double blink made three) |
+| **Real Muse, user's standard + noisy session (9.7 min), leave one session out**, blink signal / threshold / synthetic data learned from the training session only | forehead average: 13/28 (46 %) · 1.22/min. **Learned blink signal: 22/28 (79 %)** · 2.16/min (fires on double blinks) | real data only: 21/28 (75 %) · 1.76/min. **Real + synthetic: 23/28 (82 %) · 0.81/min** (4 of 6 false: nodding) |
+
+**What the user's first real sessions showed** (plots of every prompt per sensor):
+- **On this Muse, blinks are largest on TP9/TP10** (±300 µV, sharp dip-then-peak per blink, the same on both). AF7 shows a smaller mirror image, and AF8 is noisy and moves with TP. The Muse reference sits on the forehead (Fpz), right above the eyes, so a blink appears inverted on the ear sensors. That's the "synchronised TP9/TP10 peak" the user saw. The AF7/AF8 average used until then was close to the *weakest* view of the blinks (D25).
+- **Nods and head turns look different:** large slow swings on AF7/AF8 (AF8 up to ±500 µV), small on TP.
+- **Fix 1: a learned blink signal.** From the person's labelled blink prompts, the dominant spatial pattern is learned (first principal component, median over prompts), giving TP9 −0.62, AF7 +0.20, AF8 −0.35, TP10 −0.67 for this user. The rule, the candidate finder and the features all use it, and the rule's threshold is learned from the same data. A calibration done on another signal is ignored (calibration results record which signal they belong to).
+- **Fix 2: synthetic data from the person's own recordings** (user's idea). Their real individual blinks are cut out and recombined as 1–4 blinks with varied strength (×0.75–1.3), speed (×0.85–1.2) and gaps (their real triple-blink rhythm ×0.8–1.3), placed on real stretches of their recordings, nods and head turns included. They are used only for training; every number above is on held-out *real* data. This halved the false triggers (1.76 → 0.81/min).
+- **Boundaries session** (user's idea, `boundaries` protocol, ~6.4 min): the person shows the edges, both what should count (soft / fast / slow triple blinks, while looking down or talking) and the closest look-alikes (double and four blinks, one hard blink, squeezing the eyes, natural blinks, nodding three times, looking up/down, raising eyebrows). The report breaks misses down by variant and false triggers by activity.
+
+#### Decision test: is a machine-learning model necessary? ([BLINK_DECISION.md](BLINK_DECISION.md))
+
+Once the blink signal was right, the user asked whether ML is needed at all (2026-11-10). The test was **pre-registered before the deciding sessions were recorded.** The criteria are constants in `bayn.events.blink_ml`, and the report is generated (`.\bayn blink decide`).
+- **Contenders:**
+  - The rule on the learned blink signal.
+  - The classifier trained on real + synthetic data.
+  - Both learn only from the sessions not being tested (leave one session out, real recordings only).
+- **Decision rule:** ML is necessary only if it is *clearly* better, meaning either:
+  - ≥ 10 points more triple blinks caught with no more false triggers, or
+  - ≥ 0.5/min fewer false triggers while catching ≤ 5 points fewer.
+  - Otherwise the simpler rule wins. Auto applies the same rule live.
+- **Final once there are:**
+  - a standard, a noisy and a boundaries session;
+  - sessions done seated *and* standing (user: the demo may be given standing).
+  - Walking in place (spoken prompts) is reported per condition, not required.
+- **Re-recording:** bad sessions may be deleted and re-recorded *before* running the test, never because of its result.
+
+| Status | Rule (learned signal) | ML (real + synthetic) | Verdict |
+|---|---|---|---|
+| Preliminary (standard + noisy, seated, 9.7 min) | 24/28 caught (86 %, CI 69–94 %) · 0.41 false/min (all nods) | 23/28 (82 %, CI 64–92 %) · 0.81/min | ML not necessary so far |
+| **FINAL** (6 sessions, 31 min: 2 standard, 2 noisy, 1 boundaries seated, 1 standard standing; 96 triple-blink prompts) | **64/96 (67 %) · 0.30 false/min** | 61/96 (64 %) · 0.73/min | **ML is not necessary.** Same recall, less than half the false triggers. Auto runs the rule on the learned blink signal |
+
+**Why recall fell to 67 % in the final data** (diagnosed after the decision; the verdict is unchanged):
+- **16 of 32 misses:** slow and soft triple blinks had gaps of 0.85–1.0 s, but the rule allows at most 0.8 s, a value guessed in the simulator.
+- **7 misses:** later blinks of a series measure larger (they rise from the previous blink's dip), so the first blink was dropped as "too small".
+- **4 misses:** a fourth peak (possibly real fourth blinks).
+- **3 misses:** fast blinks merged.
+- The classifier's peak finder has the same gap limit.
+- **Possible follow-up, Rule v2 (not built):** learn the gap limits from the person's own triple blinks, measure every blink of a series the same way, and evaluate held-out. It would be reported separately and wouldn't change the recorded verdict.
+
+**User demo test (2026-11-10, live, Auto = rule on the learned signal):** "triple blink is satisfactory for a demo… if the blinks are intentional enough and not too soft they are caught almost every time". It is not scored, because some triple blinks were made during the 15 s cooldown.
+
+**Exploratory nod check** (forehead/ear ratio): it lost blinks held-out (71 % vs 86 %). Blinks done while talking or moving have forehead/ear ratios up to 3.3, overlapping nods (2.9 and 5.8), so a cut-off learned in one condition doesn't transfer. It is reported but not used.
+
+**Lesson (simulator):** the classifier needs roughly **2 standard + 2 noisy sessions** (~20 min) before it beats the rule. That's why Auto checks the held-out result before switching.
+
+**First look at real data** (the 15 event windows from the user's Phase 3 headset test, unlabelled):
+- Real blinks are large and wide: about 300–450 µV and ~170 ms on the forehead, versus 115 ms in the simulator.
+- **TP9/TP10 move with the forehead peak, weakly and positively** (median correlation +0.1 to +0.3), so the simulator now couples blinks that way. The labelled sessions measure it per class (`python -m bayn.events.blink_ml inspect`).
+- Real forehead noise is 22–87 µV robust sigma (simulator ~10), which led to defect D23.
+
+| Activity | Level | Acceptance criterion | Result |
+|---|---|---|---|
+| Rule: triple blinks caught; single and double blinks never fire; count configurable; band-pass rebound is not an extra blink | Unit | ≥ 90 % caught, 0 false | ✅ 29/30 |
+| Simulator artefacts: nod (2–3 times), head turn, sideways glance, talking; triple/double blink series; TP9/TP10 blink coupling | Unit | each has its signature (glance: AF7/AF8 opposite; nod: wide, large on TP) | ✅ |
+| The rule false-triggers on simulated nodding (reproduces F1) | Unit | ≥ 2 of 16 nods fire | ✅ |
+| Protocols: prompt counts, ~4.5–5.5 min, random order per session; session save/load | Unit | as designed | ✅ |
+| Finder groups a triple blink into one episode; features finite; **offline features = live features** | Unit | exact match | ✅ |
+| Labels follow the prompts (each triple-blink prompt yields its episode; double/single blinks become "blinks") | Unit | ≥ all but one | ✅ |
+| Train on 4 simulated sessions, leave one session out | Integration | ML recall ≥ 85 %, false triggers/min ≤ the rule | ✅ 95 %, 0.34 vs 1.08/min |
+| Live ML detector on a fresh simulated stream full of near misses | Integration | all but ≤ 2 triple blinks caught, ≤ 2 false, ≤ the rule's false, ≤ 1 near miss fired | ✅ |
+| Auto uses ML only if it beat the rule held-out; `ml` forces it; no model → rule; incompatible model rejected | Unit / Integration | as designed | ✅ |
+| Event manager records a session (no events fire meanwhile), simulator performs the prompts, asks for training | Unit | as designed | ✅ |
+| Dashboard → recording session → saved → trained in the background (real processes) | System | session saved; trained or "not enough examples" reported | ✅ |
+| Learned blink signal recovers a TP-dominant pattern; synthetic data built only from the person's blinks; report compares 4 variants; a model moves the rule onto the learned signal, and a calibration on another signal is ignored | Unit / Integration | as designed | ✅ |
+| **Real headset: decision test** (pre-registered, [BLINK_DECISION.md](BLINK_DECISION.md)) | Manual (user) + held-out | answers "is ML necessary?" | ✅ FINAL: no (rule 67 % / 0.30 per min vs ML 64 % / 0.73) |
+| **Live demo run by the user, intentional triple blinks** | Manual (user) | satisfactory for a demo | ✅ "caught almost every time" when intentional and not too soft (not scored: cooldown overlaps) |
+| **10 min of normal activity** (talking, head movement, natural blinking) with the trigger armed | Manual (user) | ≤ 1 false trigger | ⏳ |
+| Gesture-to-event latency | Manual | ≤ 1.5 s after the last blink | ⏳ (by design ~0.5–0.7 s after the third blink) |
 
 ### Phase 7: Setup & packaging polish (planned)
 
@@ -400,7 +482,7 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | Signal-quality display | quality unit tests, system test, hardware `check` | ✅ |
 | Brainwave bands δ θ α β γ per sensor, Muse-app style (user request) | band unit tests, system test, live headset run | ✅ |
 | Guided onboarding / calibration (user request) | Phase 6 plan | ⏳ |
-| Gesture trigger: jaw clench / double blink, configurable | detector unit tests, system test, demo run, user test | ✅ sim · ✅ clench on real headset · ❌ double blink on real headset (F1 → Phase 6) |
+| Gesture trigger: jaw clench / triple blink (double blink until 2026-11-10), configurable | detector unit tests, system test, demo run, user test | ✅ sim · ✅ clench on real headset · ⏳ triple blink on real headset (F1 → Phase 6 ML, sessions pending) |
 | Per-user calibration | calibration unit + system tests, user test | ✅ sim · ✅ clench on real headset |
 | Cooldown against false triggers | `test_cooldown_suppresses_second_gesture`, false-trigger tests | ✅ |
 | Visual + audio feedback | manual (banner, plot marker, Web Audio beep) | ⏳ user |
@@ -443,6 +525,10 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | D19 | Benchmark (reading transcripts) | Correct transcripts scored as errors: "10-20", "40 seconds", "3.14", "Sarah" counted as lost key terms | Metrics compared number words with digits literally; a name's equally valid spelling was not accepted | Numbers normalised in words and digits, English and Arabic ("ten twenty" = "10:20" = "عشرة وعشرين"); decimals only joined across "point"/"فاصلة", so a self-correction ("3.4. 3.14") stays visible; key terms accept alternatives (`Sara\|Sarah`) | `test_numbers_score_the_same_in_words_and_digits`, `test_digit_transcripts_keep_the_key_terms` |
 | D20 | Benchmark (reading summaries) | English summaries flagged "wrong language" | The "Unclear" section quotes Arabic fragments verbatim, which is its purpose | Language judged on the summary and key points only | `test_quality_check_*` |
 | D21 | Benchmark (reading summaries) | A summary saying "40 years" (Whisper misheard "forty seconds") was credited with the duration fact; Arabic summaries using Whisper's Arabic-letter English terms (النيوكليوس) were not credited | Fact keywords too loose (number alone) and too strict (no transliterations) | Duration needs the unit; Arabic facts accept recognisable transliteration stems | `test_reading_the_script_back_covers_every_fact_and_nothing_forbidden` |
+| D26 | Building the decision test | The rule on the learned signal fired on double blinks (6 false triggers) | Learning the rule threshold needs rest periods; the noisy session has none, so a fold trained on it got no threshold and fell back to 90 µV (blinks there are ~500 µV) | Natural-sitting activity counts as rest → 86 % caught, 0.41 false/min, and no double blink fires | decision test report |
+| D25 | Real headset sessions (user: "still not very accurate") | Rule 12/28 and ML 10/28 triple blinks caught | The blink signal was the AF7/AF8 average, but on the Muse blinks are largest on TP9/TP10 (forehead reference) and AF8 is noisy, so the average was close to the weakest view of the blinks | Blink signal learned per person from their labelled blinks; synthetic training data from their own blinks → ML 23/28, 0.81 false/min held-out | `test_learned_weights_find_the_persons_blink_pattern`, `test_trained_model_moves_the_rule_onto_the_learned_signal` |
+| D24 | Switching the trigger to three blinks (simulator) | The rule missed 4–5 of 30 triple blinks | Each blink's 0.3 Hz high-pass rebound pulls the baseline down; the third blink of a fast series rose 170 µV but only reached +87 µV, under the 90 µV threshold. Two blinks overlapping without returning to baseline also merged | Inside a series, a blink counts by its rise from the dip before it (and must cross zero); a peak also ends on a 40 % dip; stray weaker blinks (< 45 % of the largest) aren't counted → 29/30 | `test_triple_blink_detection_rate`, `test_single_and_double_blinks_do_not_fire` |
+| D23 | Phase 6, checking the candidate finder on real Muse windows | The ML finder saw only 37 peaks in 10 min of real EEG (natural blinking gives > 100) | Its threshold was 5 × noise; real forehead noise is 22–87 µV (simulator ~10 µV), so the threshold reached 110–430 µV, above many real blinks | 3 × noise, kept between 30 and 100 µV → 5–18 candidates per 40 s window, in line with blink rates | `test_finder_groups_a_double_blink_into_one_episode`, re-run on the real windows |
 | D22 | Benchmark tool | CPU-mode RAM of every model measured as 0 MB | Ollama 0.40 runs the model in a separate `llama-server.exe`, not `ollama.exe` | Memory probe counts all `*llama*` processes | manual re-measure |
 | D15 | Live mic (user) | Event transcript lost the end of the last sentence ("يبرد فوق في السما") | A pause > 0.6 s just before +30 s split the sentence; the second half started after the window end | Window transcript includes speech continuing with < 1.5 s pause, up to `event_tail_s` (4 s) | `test_event_transcript_finishes_the_sentence_in_progress` |
 | D14 | Unit (test bug) | Timestamp continuity check failed for the file source | 1e-9 s tolerance is below double precision at unix ~1.8e9 s (~2e-7 s) | 1e-6 s tolerance | `test_stitch_and_file_source` |
@@ -455,7 +541,7 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | F5 | Real-model test 2026-11-10 | Gemma 4 E2B mentioned the user's aside before the reading ("Black Clover") in a summary; qwen2.5:7b had left it out | The window includes 10 s before the trigger | **Not a demo goal** (user, 2026-11-10): the aside isn't representative classroom chatter. Removed from the forbidden list |
 | F3 | Summary evaluation 2026-11-09 | Summaries are faithful but imperfect: Arabic output covers fewer facts (68 % vs 96 % English with qwen2.5:7b) because it is more abstract, not wrong. Small embellishments happen ("or dropping of his head"). The "Unclear" list is almost never used, even when the transcript has obvious recognition errors. qwen2.5:3b (CPU / small GPUs) covers only ~50 % | Small local models; noisy transcripts | Accepted for the prototype. More scenarios (user's new scripts) and a larger model where hardware allows. Always shown with "automatic transcript, may contain errors" |
 | F2 | Live mic, user test 2026-11-09 | Mixed Arabic/English **inside** a sentence: 39.7 % WER. English-decoded utterances **translate or transliterate the Arabic** ("فاكرين إيش صار لها" → "Do you think what happened?", شباب → "shabab"); Arabic-decoded ones mostly keep the English words | `mixed` forces one language per utterance; Whisper handles intra-sentence code-switching poorly when forced to English | **Current limitation, accepted for now.** The test script was very informal and heavily mixed. The realistic case is Arabic speech with **occasional English key terms** (e.g. "pie", "Rutherford"), which **must not be lost**. To be measured in the transcription benchmark (§4, "Later"). Candidate fixes are already in the code but off by default: `mixed_strategy: arabic_lean`, `initial_prompt: auto` |
-| F1 | Hardware, user test 2026-11-09 | Rule-based double blink: head movements cause false triggers; natural-strength double blinks are missed | Movement artefacts and blinks overlap in amplitude on AF7/AF8; calibration "rest" includes natural blinks, which pushes the threshold up | Phase 6: ML detector (EEG only and EEG + accelerometer), evaluated against the rule on labelled real data. Until then, **jaw clench** is the recommended trigger |
+| F1 | Hardware, user test 2026-11-09 | Rule-based double blink: head movements cause false triggers; natural-strength double blinks are missed | Movement artefacts and blinks overlap in amplitude on AF7/AF8; calibration "rest" includes natural blinks, which pushes the threshold up | Phase 6: trigger changed to a triple blink; EEG-only ML detector built and verified in simulation (fewer false triggers than the rule with ~20 min of training data); real-headset sessions pending. Until it is trained on the user's data, **jaw clench** is the recommended trigger |
 
 ### Environment issues (not software defects)
 

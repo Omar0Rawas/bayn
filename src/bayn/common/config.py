@@ -77,7 +77,7 @@ class AutoGestures(BaseModel):
     enabled: bool = False
     first_after_s: float = 15.0
     every_s: float = 45.0
-    sequence: list[str] = ["clench", "double_blink"]
+    sequence: list[str] = ["clench", "triple_blink"]
 
 
 class SimulatorConfig(BaseModel):
@@ -97,7 +97,8 @@ class ClenchConfig(BaseModel):
     min_threshold_uv: float = 8.0
 
 
-class DoubleBlinkConfig(BaseModel):
+class BlinkConfig(BaseModel):
+    count: int = 3                  # blinks in the trigger (user: 3, 2026-11-10)
     band_hz: tuple[float, float] = (0.3, 10.0)
     threshold_uv: float | None = None
     default_threshold_uv: float = 90.0
@@ -105,6 +106,13 @@ class DoubleBlinkConfig(BaseModel):
     max_gap_s: float = 0.8
     max_width_s: float = 0.6
     settle_s: float = 0.45
+    method: Literal["auto", "rule", "ml"] = "auto"   # auto: classifier if it beat the rule held-out; ml: always
+    ml_threshold: float = 0.5                          # P(triple blink) needed to fire
+
+
+class TrainingConfig(BaseModel):
+    auto_inject_sim: bool = True     # simulator: perform each prompted gesture automatically
+    scale: float = 1.0               # < 1 shortens the protocols (tests)
 
 
 class CalibrationConfig(BaseModel):
@@ -117,15 +125,16 @@ class CalibrationConfig(BaseModel):
 
 
 class EventsConfig(BaseModel):
-    gesture: Literal["clench", "double_blink", "both", "manual"] = "clench"
+    gesture: Literal["clench", "triple_blink", "both", "manual"] = "clench"
     cooldown_s: float = 15.0
     manual_debounce_s: float = 2.0
     pre_s: float = 10.0
     post_s: float = 30.0
     profile: str = "default"
     clench: ClenchConfig = ClenchConfig()
-    double_blink: DoubleBlinkConfig = DoubleBlinkConfig()
+    triple_blink: BlinkConfig = BlinkConfig()
     calibration: CalibrationConfig = CalibrationConfig()
+    training: TrainingConfig = TrainingConfig()
 
 
 class AudioConfig(BaseModel):

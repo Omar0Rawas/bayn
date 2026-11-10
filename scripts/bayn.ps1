@@ -84,6 +84,7 @@ switch ($Task) {
   "corpus" { Require-Venv; & $Py -m bayn.corpus @Rest }
   "eval-stt" { Require-Venv; & $Py -m bayn.transcription.evaluate @Rest }
   "benchmark" { Require-Venv; & $Py -m bayn.benchmark @Rest }
+  "blink"  { Require-Venv; if ($Rest) { $a = $Rest } else { $a = @("decide") }; & $Py -m bayn.events.blink_ml @a --source muse }
   "sample-audio" { Require-Venv; & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "make_sample_audio.ps1") }
   "bridge" { Require-Venv; & $Py -m bayn.eeg.bridge @Rest }
   "ui"     { Require-Venv; & $Py -m bayn.ui.server @Rest }
@@ -111,6 +112,8 @@ Bayn tasks:
   benchmark  Whisper x LLM on the recorded corpus, GPU and 4-thread CPU (docs/BENCHMARK.md):
            benchmark stt --models small large-v3-turbo | benchmark llm --models qwen2.5:3b --sources all
            benchmark report
+  blink    blink detector: blink decide (default) = is ML necessary? -> docs/BLINK_DECISION.md
+           blink train | blink inspect (headset sessions in data/training/)
   bridge   EEG bridge only           ui   dashboard only
   test     run the test suite        doctor  check this machine
   clean    remove caches

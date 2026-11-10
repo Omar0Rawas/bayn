@@ -5,11 +5,11 @@ from __future__ import annotations
 from bayn.common.config import EventsConfig
 from bayn.events.detectors.base import CalibrationResult, Detection, Detector
 from bayn.events.detectors.clench import ClenchDetector
-from bayn.events.detectors.double_blink import DoubleBlinkDetector
+from bayn.events.detectors.blinks import BlinkCountDetector
 from bayn.events.detectors.manual import ManualDetector
 from bayn.events.detectors.seizure_stub import SeizureDetectorStub
 
-GESTURE_CHOICES = ("clench", "double_blink", "both", "manual")
+GESTURE_CHOICES = ("clench", "triple_blink", "both", "manual")
 
 
 def make_gesture_detectors(gesture: str, cfg: EventsConfig, fs: float, channels: list[str]) -> list[Detector]:
@@ -19,10 +19,15 @@ def make_gesture_detectors(gesture: str, cfg: EventsConfig, fs: float, channels:
     out: list[Detector] = []
     if gesture in ("clench", "both"):
         out.append(ClenchDetector(fs, channels, cfg.clench))
-    if gesture in ("double_blink", "both"):
-        out.append(DoubleBlinkDetector(fs, channels, cfg.double_blink))
+    if gesture in ("triple_blink", "both"):
+        if cfg.triple_blink.method == "rule":
+            out.append(BlinkCountDetector(fs, channels, cfg.triple_blink))
+        else:   # the ML detector (falls back to the rule until a model is trained); lazy: avoids a cycle
+            from bayn.events.blink_ml import MLBlinkDetector
+
+            out.append(MLBlinkDetector(fs, channels, cfg.triple_blink))
     return out
 
 
-__all__ = ["CalibrationResult", "ClenchDetector", "Detection", "Detector", "DoubleBlinkDetector",
+__all__ = ["CalibrationResult", "ClenchDetector", "Detection", "Detector", "BlinkCountDetector",
            "GESTURE_CHOICES", "ManualDetector", "SeizureDetectorStub", "make_gesture_detectors"]

@@ -31,10 +31,11 @@ from bayn.common.log import setup_logging
 from bayn.common.schemas import (GESTURES, TOPIC_AUDIO_LEVEL, TOPIC_AUDIO_STATUS, TOPIC_CALIBRATION,
                                  TOPIC_EEG_BANDS, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED, TOPIC_EEG_STATUS, TOPIC_EVENT,
                                  TOPIC_EVENT_DONE, TOPIC_EVENTS_STATUS, TOPIC_SUMMARY, TOPIC_SUMMARY_STATUS,
-                                 TOPIC_SUMMARY_TOKEN, TOPIC_TRANSCRIPT, TOPIC_TRANSCRIPT_PARTIAL,
+                                 TOPIC_SUMMARY_TOKEN, TOPIC_TRAINING, TOPIC_TRANSCRIPT, TOPIC_TRANSCRIPT_PARTIAL,
                                  TOPIC_TRANSCRIPT_STATUS, TOPIC_TRANSCRIPT_WINDOW)
 from bayn.events.detectors import GESTURE_CHOICES
 from bayn.events.store import DOWNLOADABLE, EventStore
+from bayn.events.training import CONDITIONS, delete_recording, session_summaries
 from bayn.transcription.service import LANGUAGES
 from bayn.transcription.store import TranscriptStore
 
@@ -96,10 +97,10 @@ async def _relay_eeg(cfg: AppConfig, hub: Hub) -> None:
 
 async def _relay_events(cfg: AppConfig, hub: Hub) -> None:
     sub = ThreadedSubscriber(cfg.bus.events_host, cfg.bus.events_pub_port,
-                             [TOPIC_EVENTS_STATUS, TOPIC_EVENT, TOPIC_EVENT_DONE, TOPIC_CALIBRATION],
+                             [TOPIC_EVENTS_STATUS, TOPIC_EVENT, TOPIC_EVENT_DONE, TOPIC_CALIBRATION, TOPIC_TRAINING],
                              asyncio.get_running_loop())
     kinds = {TOPIC_EVENTS_STATUS: "trigger_status", TOPIC_EVENT: "event",
-             TOPIC_EVENT_DONE: "event_done", TOPIC_CALIBRATION: "calibration"}
+             TOPIC_EVENT_DONE: "event_done", TOPIC_CALIBRATION: "calibration", TOPIC_TRAINING: "training"}
     try:
         while True:
             topic, m = await sub.queue.get()
@@ -108,6 +109,8 @@ async def _relay_events(cfg: AppConfig, hub: Hub) -> None:
                 hub.last_events_status = msg
             elif topic == TOPIC_CALIBRATION:
                 hub.last_calibration = msg
+            elif topic == TOPIC_TRAINING and m.get("state") in ("trained", "train_failed"):
+                hub.last_by_type["training"] = msg          # a reloaded page still shows the last result
             await hub.broadcast(msg)
     finally:
         sub.close()
@@ -154,6 +157,20 @@ class CalibrationRequest(BaseModel):
 
 class GestureRequest(BaseModel):
     gesture: str
+
+
+class TrainingRequest(BaseModel):
+    action: str = "start"           # start | cancel | retrain
+    protocol: str = "standard"      # standard | noisy | boundaries
+    condition: str = "seated"       # seated | standing | walking
+
+
+class SessionDeleteRequest(BaseModel):
+    id: str
+
+
+class BlinkMethodRequest(BaseModel):
+    method: str                     # auto | rule | ml
 
 
 class LanguageRequest(BaseModel):
@@ -249,6 +266,37 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
             raise HTTPException(400, "action must be start or cancel")
         _send_events({"cmd": "calibrate", "action": req.action})
         return {"queued": req.action}
+
+    @app.post("/api/events/training", status_code=202)
+    async def training(req: TrainingRequest) -> dict:
+        if req.action not in ("start", "cancel", "retrain") or req.protocol not in ("standard", "noisy", "boundaries") \
+                or req.condition not in CONDITIONS:
+            raise HTTPException(400, "action: start | cancel | retrain; protocol: standard | noisy | boundaries; "
+                                     "condition: seated | standing | walking")
+        _send_events({"cmd": "train", "action": req.action, "protocol": req.protocol, "condition": req.condition})
+        return {"queued": req.action}
+
+    def _eeg_source() -> str:
+        return (hub.last_status or {}).get("source") or cfg.eeg.source
+
+    @app.get("/api/events/training/sessions")
+    async def training_sessions() -> dict:
+        """Saved recording sessions for this profile + headset (re-record: delete one, record it again)."""
+        return {"profile": cfg.events.profile, "source": _eeg_source(),
+                "sessions": session_summaries(cfg.events.profile, _eeg_source())}
+
+    @app.post("/api/events/training/delete")
+    async def training_delete(req: SessionDeleteRequest) -> dict:
+        if not delete_recording(cfg.events.profile, _eeg_source(), req.id):
+            raise HTTPException(404, "no such session")
+        return {"deleted": req.id}
+
+    @app.post("/api/events/blink_method", status_code=202)
+    async def blink_method(req: BlinkMethodRequest) -> dict:
+        if req.method not in ("auto", "rule", "ml"):
+            raise HTTPException(400, "method must be auto, rule or ml")
+        _send_events({"cmd": "set_blink_method", "method": req.method})
+        return {"queued": req.method}
 
     @app.post("/api/events/gesture", status_code=202)
     async def gesture(req: GestureRequest) -> dict:

@@ -93,7 +93,8 @@ class Bridge:
         for c in self.cmd.poll():
             if c.get("cmd") == "inject":
                 g = c.get("gesture", "")
-                onset = self.source.inject(g) if g in GESTURES else None
+                delay = min(30.0, max(0.0, float(c.get("delay_s", 0.05))))
+                onset = self.source.inject(g, delay) if g in GESTURES else None
                 log.info("inject %s -> %s", g, "ok" if onset else "not supported by this source")
                 self.pub.send(TOPIC_EEG_INJECTED, {"gesture": g, "t": onset, "ok": onset is not None})
 

@@ -48,6 +48,12 @@ Check every change against the laptop, not just the dev PC:
 - Windows PowerShell 5.1 reads .ps1 files as ANSI: keep scripts ASCII; put Arabic text in UTF-8 data files. Events logic lives in `EventManager` (pure, data-time driven → test offline
   with tests/helpers.py `sim_chunks`). Event stream: `events.event` → `events.done` (window saved: starts pipeline).
 - Data: data/events/<id>/ (eeg.npz/csv, meta.json), data/bayn.db (SQLite), data/profiles/<profile>-<source>.json.
+- Trigger gesture = TRIPLE blink (user, 2026-11-10; `events.triple_blink.count: 3`; double/single blinks must not
+  fire). Phase 6: EEG ONLY (no accelerometer: the end device won't have one). `events/training.py` =
+  labelled recording sessions (standard / noisy) → data/training/<profile>-<source>/*.npz; `events/blink_ml.py` =
+  candidate finder → 27 features (incl. TP9/TP10 vs forehead) → random forest → data/models/blink-<profile>-<source>
+  .joblib → `MLDoubleBlinkDetector` (rule fallback; `double_blink.method` auto = ML only if it beat the rule held-out). Finder + features must stay identical
+  offline and live (test). Real Muse forehead noise is 22-87 µV (sim ~10): check changes on real windows too.
 - Config: config/default.yaml <- config/local.yaml <- .env <- env vars `BAYN_SECTION__KEY` (src/bayn/common/config.py).
 
 ## Hardware notes

@@ -3,9 +3,9 @@ with known gesture times, false-trigger rate with realistic distractors, calibra
 
 import pytest
 
-from bayn.common.config import ClenchConfig, DoubleBlinkConfig, EventsConfig
+from bayn.common.config import BlinkConfig, ClenchConfig, EventsConfig
 from bayn.eeg.sources.simulated import SimulatedEEG
-from bayn.events.detectors import (ClenchDetector, Detection, Detector, DoubleBlinkDetector, ManualDetector,
+from bayn.events.detectors import (BlinkCountDetector, ClenchDetector, Detection, Detector, ManualDetector,
                                    SeizureDetectorStub, make_gesture_detectors)
 from tests.helpers import CHANNELS, FS, match, schedule_injections, sim_chunks
 
@@ -13,10 +13,11 @@ pytestmark = pytest.mark.unit
 
 ALL_DETECTORS = [
     lambda: ClenchDetector(FS, CHANNELS),
-    lambda: DoubleBlinkDetector(FS, CHANNELS),
+    lambda: BlinkCountDetector(FS, CHANNELS),
     lambda: ManualDetector(FS, CHANNELS),
     lambda: SeizureDetectorStub(FS, CHANNELS),
 ]
+CONTRACT = ALL_DETECTORS + [lambda: __import__("bayn.events.blink_ml", fromlist=["x"]).MLBlinkDetector(FS, CHANNELS)]
 
 
 def _run(det: Detector, seconds: float, seed: int, gesture: str | None = None, n: int = 0,
@@ -30,7 +31,7 @@ def _run(det: Detector, seconds: float, seed: int, gesture: str | None = None, n
 
 
 # ---------------------------------------------------------------- interface contract
-@pytest.mark.parametrize("factory", ALL_DETECTORS, ids=["clench", "double_blink", "manual", "seizure_stub"])
+@pytest.mark.parametrize("factory", CONTRACT, ids=["clench", "triple_blink", "manual", "seizure_stub", "ml_blink"])
 def test_detector_contract(factory):
     det = factory()
     assert isinstance(det, Detector) and det.name and det.label
@@ -50,7 +51,7 @@ def test_seizure_stub_never_fires():
 
 def test_factory_follows_gesture_setting():
     cfg = EventsConfig()
-    assert [d.name for d in make_gesture_detectors("both", cfg, FS, CHANNELS)] == ["clench", "double_blink"]
+    assert [d.name for d in make_gesture_detectors("both", cfg, FS, CHANNELS)] == ["clench", "triple_blink"]
     assert make_gesture_detectors("manual", cfg, FS, CHANNELS) == []
     with pytest.raises(ValueError):
         make_gesture_detectors("wink", cfg, FS, CHANNELS)
@@ -81,31 +82,37 @@ def test_clench_fires_once_per_clench():
     assert len(found) == len(onsets) == 3
 
 
-# ---------------------------------------------------------------- double blink
-def test_double_blink_detection_rate():
+# ---------------------------------------------------------------- triple blink (the trigger since 2026-11-10)
+def test_triple_blink_detection_rate():
     hits = total = fps = 0
     for seed in range(3):
-        onsets, found = _run(DoubleBlinkDetector(FS, CHANNELS), 8 + 10 * 20, seed, "double_blink", 10)
+        onsets, found = _run(BlinkCountDetector(FS, CHANNELS), 8 + 10 * 20, seed, "triple_blink", 10)
         h, fp, _ = match(found, onsets)
         hits, total, fps = hits + h, total + len(onsets), fps + fp
     assert hits / total >= 0.9, f"{hits}/{total}"          # sim target; real-headset tuning in Phase 6
     assert fps == 0
 
 
-def test_single_blinks_do_not_fire():
-    _, found = _run(DoubleBlinkDetector(FS, CHANNELS), 140, seed=5, gesture="blink", n=6)
+@pytest.mark.parametrize("gesture", ["blink", "double_blink"])
+def test_single_and_double_blinks_do_not_fire(gesture):
+    _, found = _run(BlinkCountDetector(FS, CHANNELS), 140, seed=5, gesture=gesture, n=6)
     assert found == []
+
+
+def test_blink_count_is_configurable():
+    onsets, found = _run(BlinkCountDetector(FS, CHANNELS, BlinkConfig(count=2)), 60, seed=4, gesture="double_blink", n=2)
+    assert match(found, onsets)[0] == 2 and BlinkCountDetector(FS, CHANNELS, BlinkConfig(count=2)).label == "Double blink"
 
 
 def test_rebound_is_not_a_third_blink():
     """Regression (D9): the band-pass rebound after a blink was counted as another blink."""
-    det = DoubleBlinkDetector(FS, CHANNELS)
-    onsets, found = _run(det, 30, seed=6, gesture="double_blink", n=1, distractors=False)
+    det = BlinkCountDetector(FS, CHANNELS)
+    onsets, found = _run(det, 30, seed=6, gesture="triple_blink", n=1, distractors=False)
     assert match(found, onsets)[0] == 1
 
 
 # ---------------------------------------------------------------- false triggers
-@pytest.mark.parametrize("factory", ALL_DETECTORS[:2], ids=["clench", "double_blink"])
+@pytest.mark.parametrize("factory", ALL_DETECTORS[:2], ids=["clench", "triple_blink"])
 def test_no_false_triggers_in_10_minutes_of_distractors(factory):
     """Natural blinks + short muscle bursts, no deliberate gestures: <= 1 trigger per 10 min."""
     _, found = _run(factory(), 600, seed=7, gesture=None)
@@ -113,8 +120,8 @@ def test_no_false_triggers_in_10_minutes_of_distractors(factory):
 
 
 def test_gestures_dont_cross_trigger():
-    _, f1 = _run(DoubleBlinkDetector(FS, CHANNELS), 100, seed=8, gesture="clench", n=4)
-    _, f2 = _run(ClenchDetector(FS, CHANNELS), 100, seed=8, gesture="double_blink", n=4)
+    _, f1 = _run(BlinkCountDetector(FS, CHANNELS), 100, seed=8, gesture="clench", n=4)
+    _, f2 = _run(ClenchDetector(FS, CHANNELS), 100, seed=8, gesture="triple_blink", n=4)
     assert f1 == [] and f2 == []
 
 
@@ -132,7 +139,7 @@ def _segments(gesture: str, seed: int = 9):
     return rest, segs
 
 
-@pytest.mark.parametrize("cls,gesture", [(ClenchDetector, "clench"), (DoubleBlinkDetector, "double_blink")])
+@pytest.mark.parametrize("cls,gesture", [(ClenchDetector, "clench"), (BlinkCountDetector, "triple_blink")])
 def test_calibration_separates_rest_and_gesture(cls, gesture):
     det = cls(FS, CHANNELS)
     rest, segs = _segments(gesture)
@@ -151,6 +158,6 @@ def test_calibration_fails_without_gesture():
 
 
 def test_profile_threshold_applied():
-    det = DoubleBlinkDetector(FS, CHANNELS, DoubleBlinkConfig())
+    det = BlinkCountDetector(FS, CHANNELS, BlinkConfig())
     det.apply_profile({"threshold": 123.0})
     assert det.threshold == 123.0 and det.status()["calibrated"]

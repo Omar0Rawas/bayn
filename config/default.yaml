@@ -38,11 +38,11 @@ simulator:
     enabled: false
     first_after_s: 15
     every_s: 45
-    sequence: [clench, double_blink]
+    sequence: [clench, triple_blink]
 
 events:
   gesture: clench          # which deliberate gesture fires an event:
-                           # clench | double_blink | both | manual (button/hotkey only)
+                           # clench | triple_blink | both | manual (button/hotkey only)
   cooldown_s: 15           # ignore further gestures this long after an event
   manual_debounce_s: 2     # the button/hotkey can't fire twice within this
   pre_s: 10                # EEG saved before the event...
@@ -55,14 +55,21 @@ events:
     threshold_uv: null     # null = calibrated value, else adaptive (baseline_k x resting level)
     baseline_k: 4.0
     min_threshold_uv: 8.0
-  double_blink:
+  triple_blink:             # blink THREE times (user, 2026-11-10); double/single blinks must not fire
+    count: 3
     band_hz: [0.3, 10]     # blink band on the AF7/AF8 average (low cut keeps the post-blink rebound small)
     threshold_uv: null     # null = calibrated value, else default_threshold_uv
     default_threshold_uv: 90   # on the filtered AF7/AF8 average (deliberate blinks ~120-160)
-    min_gap_s: 0.2         # gap between the two blinks
+    min_gap_s: 0.2         # gap between consecutive blinks
     max_gap_s: 0.8
     max_width_s: 0.6       # a blink is a short peak; longer = movement artefact
-    settle_s: 0.45         # wait this long after the 2nd blink to rule out a 3rd
+    settle_s: 0.45         # wait this long after the last blink to rule out one more
+    method: auto           # auto = the trained ML classifier if it beat the rule on held-out data, else the rule
+                           # rule = always the threshold rule · ml = the classifier whenever one is trained
+    ml_threshold: 0.5      # P(triple blink) the classifier needs to fire
+  training:                # labelled recording sessions for the ML blink detector (dashboard: Train blink detector)
+    auto_inject_sim: true  # in simulated mode the simulator performs the prompted gestures
+    scale: 1.0             # < 1 shortens the protocols (tests only)
   calibration:
     rest_s: 15
     reps: 3

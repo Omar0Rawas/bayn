@@ -7,11 +7,8 @@
 4. Whisper live transcription (faster-whisper, live mic, en / ar / mixed)
 5. Ollama summaries, transcript → summary view in the UI
    (+ model benchmark 2026-11-10: default summary model gemma4:e2b / qwen3:4b, re-test on the demo laptop)
-6. Tune gesture triggering on the real headset + guided onboarding (user request, "fun" feature): Muse-app-style
-   walkthrough ("blink twice", "clench your jaw", "close your eyes and watch alpha rise") that doubles as calibration
-   + **ML double-blink detector** (user request after the Phase 3 headset test): the guided onboarding records
-   labelled data → features → random forest (double / single blink / movement / other) → `MLDoubleBlinkDetector`;
-   two variants compared: EEG only (like a future device) and EEG + Muse accelerometer; rule-based stays as fallback.
+6. Triple-blink trigger + ML detector, EEG only (revised 2026-11-10: three blinks instead of two, no accelerometer,
+   onboarding dropped)
 7. Setup & packaging polish (Docker dropped 2026-11-09: Bluetooth, mic and GPU all need native processes):
    one-command setup incl. Ollama check + model pulls, offline-readiness check, laptop checklist, docs
 8. Full end-to-end test run with simulated and real data
@@ -184,3 +181,57 @@ own (mini) microphone: record the corpus again, then
 
 Next (user's order, 2026-11-10): Phase 6 blink detection (ML double blink) → if all good, move to the laptop
 (setup + retests) → clean up the repo and make it presentable.
+
+## Phase 6 — triple-blink trigger + ML detector (EEG only) ✅ (user-tested 2026-11-10: satisfactory for a demo)
+Scope (user, 2026-11-10): EEG only (the end device won't have an accelerometer), onboarding dropped, use the
+synchronised TP9/TP10 peak the user saw when blinking.
+Built:
+- Labelled recording sessions (`events/training.py`): standard (~4.7 min: double/single blinks, head turns, nods,
+  sideways glances, talking, random order) and noisy (~4.5 min: double blinks during talking / looking around /
+  moving / sitting). Dashboard: Event trigger → Blink detector → Train… Saved to data/training/<profile>-<source>/.
+- `events/blink_ml.py`: sensitive streaming candidate finder (forehead peaks → episodes) → 27 EEG features
+  (forehead shape, AF7/AF8 agreement, TP9/TP10 vs forehead, slow drift, muscle energy) → random forest per user →
+  `MLDoubleBlinkDetector` (rule fallback; `events.double_blink.method: auto|rule|ml`). Held-out evaluation vs the
+  rule: leave one session out / time blocks. CLI: `python -m bayn.events.blink_ml train|inspect`.
+- Training runs in a background thread in the events service; the new model is used immediately.
+- Simulator: nod, head turn, sideways glance, talking artefacts + TP blink coupling; dashboard buttons for them.
+- scikit-learn added to the pinned base requirements (CPU only, model ~1 MB: fine for the laptop).
+**Trigger changed to THREE blinks** (user, 2026-11-10, before any real data was recorded): double and single blinks
+are now near misses that must not fire (recorded as negatives in the standard session). The rule detector counts
+N blinks (`events.triple_blink.count`) and was fixed for fast series (D24: later blinks ride on the high-pass
+rebound of the previous one -> counted by their rise from the dip). Simulated nodding now nods 2-3 times.
+Results (simulator, 4 sessions / 19 min, leave one session out): rule 96 % caught, 1.08 false triggers/min
+(mostly nodding three times); ML 95 % caught, 0.34/min. With only 2 sessions the ML trailed the rule (82 %,
+0.95/min): it needs ~2 standard + 2 noisy sessions. Auto only uses ML once it beats the rule held-out. Real data so far (Phase 3 windows, unlabelled): blinks 300–450 µV / ~170 ms wide; TP9/TP10 weakly
+positive with the forehead peak; forehead noise 22–87 µV → finder threshold capped at 100 µV (D23).
+Tests: 196 (165 unit, 22 integration, 7 system, 2 hardware).
+
+**First real sessions (2026-11-10, standard + noisy):** "still not very accurate": rule 12/28, ML 10/28. Plots showed
+why: on the Muse, blinks are largest on TP9/TP10 (forehead reference), AF8 is noisy, nods swing AF7/AF8. Fixes:
+a per-person learned blink signal (rule + finder + features), and synthetic training data recombined from the
+person's own blinks (user's idea; training only). Held-out on real data: ML 23/28 (82 %), 0.81 false/min (was
+36 %, 2.3/min); learned-signal rule 79 %, 2.16/min. New `boundaries` protocol (user's idea): soft/fast/slow triple
+blinks and the closest look-alikes (four blinks, squeeze, nod three times, look up/down, eyebrows).
+
+**Decision test: is ML necessary?** (user's question once the signal was right; pre-registered 2026-11-10;
+docs/BLINK_DECISION.md via `.\bayn blink decide`). Rule on learned signal vs classifier (real + synthetic),
+leave one session out, real data only. ML counts as necessary only if clearly better (>= +10 points caught with
+no more false triggers, or >= 0.5/min fewer false triggers at <= -5 points). Final once there are standard +
+noisy + boundaries sessions, seated and standing (the user offered standing / moving / re-recording; walking in
+place gets spoken prompts; sessions can be deleted and re-recorded from the dashboard). Preliminary (2 seated
+sessions): rule 86 % / 0.41 false/min vs ML 82 % / 0.81 -> ML NOT necessary so far. Fixed D26 on the way
+(threshold fell back to 90 uV in folds trained on the noisy session).
+
+**FINAL decision** (6 sessions, 31 min, seated + standing): rule on the learned signal 67 % caught / 0.30 false per
+min vs ML 64 % / 0.73 -> **ML is not necessary**; Auto runs the rule. Recall is limited by the rule's fixed
+0.8 s gap limit (slow/soft triple blinks) and by the first blink of a series measuring smaller; optional Rule v2
+(learned timing) noted in TESTING.md. User demo test: intentional, not-too-soft triple blinks are caught almost
+every time -> satisfactory for the demo. Dashboard option renamed: "Basic rule (untrained forehead average)".
+
+Demo tips: three firm blinks at a steady ~2/s, head still; event ~0.5 s after the third blink; 15 s cooldown.
+
+**Superseded plan (kept for history): the user's headset sessions** (they offered more sessions, noisy ones too): calibrate the triple blink,
+then Train… → 2 standard + 2 noisy sessions (~20 min); re-seat the headset between sessions; more sessions on other
+days improve robustness. Then compare rule vs ML on the held-out report, 10 min normal-activity false-trigger test.
+After that: move to the laptop (setup + benchmark retest), then repo cleanup.
+

@@ -101,8 +101,8 @@ USER = {
 }
 
 TRIGGERS = {
-    "en": {"clench": "jaw-clench gesture", "double_blink": "double-blink gesture", "manual": "manual trigger"},
-    "ar": {"clench": "إيماءة شدّ الفك", "double_blink": "إيماءة الرمش مرتين", "manual": "ضغط يدوي"},
+    "en": {"clench": "jaw-clench gesture", "triple_blink": "triple-blink gesture", "double_blink": "double-blink gesture", "manual": "manual trigger"},
+    "ar": {"clench": "إيماءة شدّ الفك", "triple_blink": "إيماءة الرمش ثلاث مرات", "double_blink": "إيماءة الرمش مرتين", "manual": "ضغط يدوي"},
 }
 
 BANDS = {

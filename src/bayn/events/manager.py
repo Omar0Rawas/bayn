@@ -18,19 +18,21 @@ from pathlib import Path
 import numpy as np
 
 from bayn.common.config import DATA_DIR, EventsConfig
-from bayn.common.schemas import TOPIC_CALIBRATION, TOPIC_EVENT, TOPIC_EVENT_DONE, EEGChunk
+from bayn.common.schemas import TOPIC_CALIBRATION, TOPIC_EVENT, TOPIC_EVENT_DONE, TOPIC_TRAINING, EEGChunk
 from bayn.eeg.buffer import RingBuffer
 from bayn.events.calibration import CalibrationSession
 from bayn.events.detectors import Detection, Detector, ManualDetector, make_gesture_detectors
 from bayn.events.stats import event_window_stats
 from bayn.events.store import EventStore
+from bayn.events.training import TrainingSession, list_recordings, session_folder
 
 log = logging.getLogger("bayn.events")
 Out = list[tuple[str, dict]]
 INJECT = "_inject"
+TRAIN = "_train"             # asks the service to train the blink classifier (in a background thread)
 STALE_GRACE_S = 5.0          # finalize by wall clock if EEG stopped arriving
 
-LABELS = {"clench": "Jaw clench", "double_blink": "Double blink", "manual": "Manual trigger",
+LABELS = {"clench": "Jaw clench", "triple_blink": "Triple blink", "double_blink": "Double blink", "manual": "Manual trigger",
           "seizure_stub": "Seizure detector"}
 
 
@@ -62,6 +64,7 @@ class EventManager:
         self.suppressed = 0            # gestures ignored because of the cooldown
         self.calibration: CalibrationSession | None = None
         self.last_calibration: dict | None = None
+        self.training: TrainingSession | None = None
         self.data_now = 0.0
         self._last_end: float | None = None
 
@@ -76,7 +79,21 @@ class EventManager:
     def profile_path(self) -> Path:
         return self.profiles_dir / f"{self.cfg.profile}-{self.source}.json"
 
+    @property
+    def model_path(self) -> Path:
+        from bayn.events.blink_ml import model_path
+
+        return model_path(self.cfg.profile, self.source)
+
+    def set_blink_method(self, method: str) -> None:
+        self.cfg = self.cfg.model_copy(update={"triple_blink": self.cfg.triple_blink.model_copy(
+            update={"method": method})})
+        self.set_gesture(self.gesture)
+
     def load_profile(self) -> dict | None:
+        for d in self.detectors:                       # trained blink classifier, if any
+            if hasattr(d, "load_model"):
+                d.load_model(self.model_path)
         try:
             prof = json.loads(self.profile_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -111,7 +128,10 @@ class EventManager:
         detections: list[Detection] = []
         for d in self.detectors:
             detections += d.update(raw, filt)   # always update (keeps levels live during calibration)
-        if self.calibration:
+        if self.training:
+            self.training.record(raw.data, ts)
+            out += self._step_training(self.data_now)
+        elif self.calibration:
             out += self._step_calibration(self.data_now)
         else:
             for det in detections:
@@ -187,7 +207,7 @@ class EventManager:
     def start_calibration(self, now: float | None = None) -> Out:
         gestures = [d.name for d in self.detectors if d.calibratable]
         if not gestures:
-            msg = {"state": "failed", "prompt": "Choose a gesture (clench or double blink) to calibrate", "t": now}
+            msg = {"state": "failed", "prompt": "Choose a gesture (clench or triple blink) to calibrate", "t": now}
             return [(TOPIC_CALIBRATION, msg)]
         start = (now if now is not None else self.data_now) + 0.5
         self.calibration = CalibrationSession(self.cfg.calibration, gestures, start)
@@ -235,11 +255,57 @@ class EventManager:
         log.info("calibration %s: %s", msg["state"], report)
         return [(TOPIC_CALIBRATION, msg)]
 
+    # ------------------------------------------------------------ blink-detector training sessions
+    def start_training(self, protocol: str = "standard", now: float | None = None, seed: int | None = None,
+                       condition: str = "seated") -> Out:
+        if self.calibration or self.training:
+            return [(TOPIC_TRAINING, {"state": "failed", "t": now, "prompt": "Another session is running"})]
+        start = (now if now is not None else self.data_now) + 3.0      # a moment to read the first prompt
+        try:
+            self.training = TrainingSession(protocol, start, seed, self.cfg.training.scale, condition)
+        except ValueError as e:
+            return [(TOPIC_TRAINING, {"state": "failed", "t": now, "prompt": str(e)})]
+        self.training.record(*self.raw_buf.latest(int(3 * self.fs)))   # filter warm-up before the start
+        log.info("training session %s started (%.0f s)", self.training.id, self.training.total_s)
+        return [(TOPIC_TRAINING, self.training.message(self.data_now, "running"))]
+
+    def cancel_training(self) -> Out:
+        if not self.training:
+            return []
+        self.training = None
+        return [(TOPIC_TRAINING, {"state": "cancelled", "prompt": "Recording cancelled (nothing saved)",
+                                  "t": self.data_now})]
+
+    def _step_training(self, now: float) -> Out:
+        tr = self.training
+        step, finished = tr.advance(now)
+        if finished:
+            return self._finish_training(now)
+        out: Out = []
+        if step is not None:
+            out.append((TOPIC_TRAINING, tr.message(now)))
+            if self.cfg.training.auto_inject_sim:
+                for offset, gesture in step.inject:
+                    out.append((INJECT, {"gesture": gesture, "delay_s": offset}))
+        return out
+
+    def _finish_training(self, now: float) -> Out:
+        tr, self.training = self.training, None
+        folder = session_folder(self.cfg.profile, self.source)
+        path = tr.save(folder, self.channels, self.fs, {"profile": self.cfg.profile, "source": self.source})
+        n = len(list_recordings(self.cfg.profile, self.source))
+        log.info("training session saved: %s (%d session(s) for this profile)", path, n)
+        msg = {"state": "saved", "t": now, "id": tr.id, "protocol": tr.protocol, "progress": 1.0,
+               "path": str(path), "sessions": n, "prompt": "Recording saved - training the detector..."}
+        return [(TOPIC_TRAINING, msg), (TRAIN, {"profile": self.cfg.profile, "source": self.source})]
+
     # ------------------------------------------------------------ status
     def status(self, wall_now: float | None = None) -> dict:
         now = self.data_now or (wall_now or time.time())
         remaining = max(0.0, self.cfg.cooldown_s - (now - self.last_event_t))
-        if self.calibration:
+        if self.training:
+            state = "training"
+        elif self.calibration:
             state = "calibrating"
         elif self.gesture == "manual":
             state = "manual"
@@ -252,6 +318,8 @@ class EventManager:
             "cooldown_s": self.cfg.cooldown_s, "detectors": [d.status() for d in self.detectors],
             "recording": [{"id": p.meta["id"], "ends_at": p.finalize_at} for p in self.pending],
             "suppressed": self.suppressed, "profile": self.profile_path.name,
+            "blink_method": self.cfg.triple_blink.method,
+            "training": self.training.message(now) if self.training else None,
             "calibrated": all(getattr(d, "calibrated_threshold", None) is not None
                               for d in self.detectors if d.calibratable) and bool(self.detectors),
             "t": now,

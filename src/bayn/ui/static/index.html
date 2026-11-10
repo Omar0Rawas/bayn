@@ -65,12 +65,22 @@
       <label class="field">Gesture
         <select id="gesture">
           <option value="clench">Jaw clench (hold ~1 s)</option>
-          <option value="double_blink">Double blink</option>
+          <option value="triple_blink">Triple blink</option>
           <option value="both">Either gesture</option>
           <option value="manual">Manual only (button / T)</option>
         </select>
       </label>
       <div class="meters" id="meters"></div>
+      <div class="blink-row" id="blink-row" hidden>
+        <label class="field">Blink detector
+          <select id="blink-method" title="Auto uses your trained classifier if it beat the threshold rule on held-out data">
+            <option value="auto">Auto: rule on your blink pattern (ML only if clearly better)</option>
+            <option value="ml">ML classifier (forced)</option>
+            <option value="rule">Basic rule (untrained forehead average)</option>
+          </select>
+        </label>
+        <button class="btn ghost" id="btn-train" type="button">Train…</button>
+      </div>
       <button class="btn primary big" id="btn-trigger" type="button"
               title="Backup manual trigger (hotkey T)">Trigger event <kbd>T</kbd></button>
       <div class="btn-row">
@@ -86,8 +96,16 @@
       <p class="muted small">Inject fake gestures into the simulated headset.</p>
       <div class="btn-row">
         <button class="btn" data-inject="clench" type="button">Jaw clench</button>
-        <button class="btn" data-inject="double_blink" type="button">Double blink</button>
+        <button class="btn" data-inject="triple_blink" type="button">Triple blink</button>
+        <button class="btn ghost" data-inject="double_blink" type="button">Double blink</button>
         <button class="btn ghost" data-inject="blink" type="button">Single blink</button>
+      </div>
+      <p class="muted small">Artefacts that should <b>not</b> trigger:</p>
+      <div class="btn-row">
+        <button class="btn ghost" data-inject="nod" type="button">Nod</button>
+        <button class="btn ghost" data-inject="head_turn" type="button">Head turn</button>
+        <button class="btn ghost" data-inject="look_side" type="button">Look sideways</button>
+        <button class="btn ghost" data-inject="talk" type="button">Talk</button>
       </div>
       <ul class="log" id="inject-log"></ul>
     </section>
@@ -165,6 +183,49 @@
       <div class="btn-row cal-actions">
         <button class="btn ghost" id="cal-cancel" type="button">Cancel</button>
         <button class="btn primary" id="cal-close" type="button" hidden>Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- blink-detector training session -->
+  <div class="overlay" id="train-overlay" hidden>
+    <div class="cal-box train-box" role="dialog" aria-modal="true" aria-labelledby="train-prompt">
+      <p class="muted small" id="train-step">Train the triple-blink detector</p>
+      <div id="train-intro" class="train-intro">
+        <p>You'll be prompted to blink, nod, turn your head, look sideways and talk. Every prompt labels
+          the EEG, and a classifier learns to tell a deliberate triple blink from everything else, double blinks included.
+          Sessions are saved, so each new one makes the detector better.</p>
+        <div class="train-options">
+          <label class="field">You are
+            <select id="train-condition">
+              <option value="seated">Seated</option>
+              <option value="standing">Standing</option>
+              <option value="walking">Walking in place (prompts are spoken)</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="train-speak"> Speak the prompts</label>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" data-protocol="standard" type="button">Standard session · ~5 min</button>
+          <button class="btn" data-protocol="noisy" type="button">Noisy session · ~4.5 min</button>
+          <button class="btn" data-protocol="boundaries" type="button">Boundaries · ~6.5 min</button>
+        </div>
+        <p class="muted small">Standard: clean examples of each gesture. Noisy: triple blinks while talking,
+          looking around and moving, to test robustness. Boundaries: soft / fast / slow triple blinks and the closest look-alikes (four blinks, squeezing, nodding three times...), to teach the edges. Do a standard one first.</p>
+        <details class="train-sessions" id="train-sessions-box">
+          <summary>Saved sessions <span id="train-sessions-count"></span></summary>
+          <p class="muted small">Messed one up? Delete it and record it again, then Retrain.</p>
+          <ul class="log" id="train-sessions"></ul>
+        </details>
+        <button class="btn ghost small-btn" id="train-retrain" type="button">Retrain from saved sessions</button>
+      </div>
+      <p class="cal-prompt" id="train-prompt" hidden></p>
+      <div class="cal-count" id="train-count"></div>
+      <div class="progress" id="train-progress-bar" hidden><i id="train-progress"></i></div>
+      <div class="cal-result" id="train-result"></div>
+      <div class="btn-row cal-actions">
+        <button class="btn ghost" id="train-cancel" type="button" hidden>Cancel</button>
+        <button class="btn primary" id="train-close" type="button">Close</button>
       </div>
     </div>
   </div>

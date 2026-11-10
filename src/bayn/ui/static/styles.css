@@ -204,7 +204,26 @@ select { font: inherit; color: var(--ink); background: var(--card); border: 1px 
 .cal-result .row { border-top: 1px solid var(--line); padding: 6px 0; }
 .cal-actions { justify-content: center; margin-top: 14px; }
 
+/* blink-detector training */
+.blink-row { display: flex; gap: 8px; align-items: flex-end; margin: 6px 0 10px; }
+.blink-row[hidden] { display: none; }
+.blink-row .field { flex: 1; margin: 0; }
+.train-box { width: min(600px, 100%); }
+.train-intro { text-align: left; font-size: 14px; }
+.train-intro .btn-row { justify-content: center; margin: 12px 0 6px; }
+.small-btn { font-size: 12px; padding: 4px 10px; }
+.cal-prompt.pause { color: var(--muted); font-size: 20px; }
+.train-table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+.train-table th, .train-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; font-variant-numeric: tabular-nums; }
+.train-table td.good { color: var(--good); font-weight: 600; }
+
 .foot { text-align: center; color: var(--muted); font-size: 12px; padding: 8px 16px 24px; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0;
   background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; transition: all .2s; pointer-events: none; max-width: calc(100% - 32px); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.train-options { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 8px; }
+.train-options .field { flex: 1; min-width: 200px; margin: 0; }
+.check { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.train-sessions { margin: 6px 0 10px; font-size: 13px; }
+.train-sessions summary { cursor: pointer; font-weight: 600; }
+.train-sessions li { display: flex; justify-content: space-between; gap: 8px; align-items: center; }

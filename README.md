@@ -27,7 +27,7 @@
 | 4 | Live Whisper transcription (English / Arabic / mixed) | ✅ done |
 | 5 | Local LLM summaries (Ollama), shown live: heard → context → summary | ✅ done |
 | 5b | Model benchmark: Whisper × LLM on recorded English / Arabic / mixed speech, GPU and minimal CPU ([results](docs/BENCHMARK.md)) | ✅ dev PC · ⏳ re-test on the demo laptop |
-| 6 | Gesture tuning + guided "blink twice" onboarding + ML blink detector (EEG / EEG + accelerometer) | ⬜ |
+| 6 | Triple-blink trigger, EEG only: learned blink pattern + rule; decision test showed ML isn't needed ([BLINK_DECISION.md](docs/BLINK_DECISION.md)) | ✅ done (user demo test) |
 | 7 | Setup & packaging polish (one-command setup, offline readiness, laptop checklist), docs | ⬜ |
 | 8 | Full end-to-end test run (simulated and real) | ⬜ |
 
@@ -47,7 +47,7 @@ flowchart LR
     MIC --> AUDIO
     subgraph Bayn["Bayn processes (all local, one ZeroMQ bus)"]
         BRIDGE["eeg bridge<br/>1–40 Hz + notch · bands<br/>quality · rolling buffer"]
-        EVENTS["events<br/>Detector: clench · double blink · manual<br/>(seizure detector later)<br/>saves EEG −10/+30 s"]
+        EVENTS["events<br/>Detector: clench · triple blink · manual<br/>(seizure detector later)<br/>saves EEG −10/+30 s"]
         AUDIO["audio<br/>16 kHz + mic level"]
         STT["transcriber<br/>Silero VAD + faster-whisper<br/>ar / en / mixed"]
         SUM["summarizer<br/>Ollama gemma4:e2b / qwen3:4b<br/>structured output"]
@@ -65,7 +65,7 @@ flowchart LR
 ```
 
 - **One message bus (ZeroMQ, TCP).** Every component is a separate process: a crash in one (e.g. the transcriber) doesn't take down the others. Everything runs natively, because Bluetooth, the microphone and the GPU all live on the host.
-- **The trigger sits behind a `Detector` interface.** The jaw clench, the double blink, the manual button/hotkey and a future seizure model are interchangeable ([seizure_stub.py](src/bayn/events/detectors/seizure_stub.py) shows where a model plugs in).
+- **The trigger sits behind a `Detector` interface.** The jaw clench, the triple blink, the manual button/hotkey and a future seizure model are interchangeable ([seizure_stub.py](src/bayn/events/detectors/seizure_stub.py) shows where a model plugs in).
 - **No hardware assumptions.** The mains notch defaults to `auto` (measures 50 vs 60 Hz). Whisper picks GPU or CPU at startup.
 - **Brainwave view, like the Muse app.** Live delta / theta / alpha / beta / gamma per sensor, e.g. *Alpha (AF7)*. Close your eyes and watch alpha rise on TP9/TP10.
 
@@ -104,7 +104,7 @@ Other commands: `test`, `doctor` (check a machine before a demo: Bluetooth, Muse
 | Trigger | How | Notes |
 |---|---|---|
 | **Jaw clench** (default) | Clench firmly and hold for about 1 s | Muscle activity on the sensors behind the ears (TP9/TP10). Talking or swallowing is too short to fire. |
-| **Double blink** | Two firm blinks within 0.8 s | Forehead sensors (AF7/AF8). A single blink or a triple blink doesn't fire. ⚠️ On the real headset, head movement can still trigger it and gentle blinks are missed. An ML detector is planned (Phase 6). |
+| **Triple blink** | Three firm blinks at a steady pace (~2 per second, each within 0.8 s of the last) | A single, double or four-fold blink doesn't fire (`events.triple_blink.count` sets the number). On the Muse, blinks show up mostly on the **ear sensors** (TP9/TP10), because its reference electrode sits on the forehead. Record a few labelled sessions (Blink detector → Train…) so Bayn learns *your* blink pattern; the rule then counts blinks on that pattern. A machine-learning classifier was tested and isn't needed ([decision](docs/BLINK_DECISION.md)). Keep your head still: nodding is the main false trigger. |
 | **Button / `T` key** | "Trigger event" in the dashboard | Always available as a backup. |
 
 Pick the gesture in the dashboard's **Event trigger** card (or `events.gesture` in the config). Then press **Calibrate…** once per person: 15 s of rest, then 3 prompted repetitions. The thresholds are saved per user, in `data/profiles/`. After an event, further gestures are ignored for a 15 s cooldown.
@@ -209,7 +209,7 @@ src/bayn/
   common/        config, ZeroMQ bus, message schemas
   eeg/           sources (simulated, Muse via BrainFlow / LSL), filters, ring buffer, quality,
                  brainwave bands, bridge, check (headset test)
-  events/        Detector interface, clench / double-blink / manual detectors, seizure stub,
+  events/        Detector interface, clench / triple-blink (rule + ML) / manual detectors, seizure stub,
                  calibration, event manager (cooldown, EEG windows), SQLite store, service
   transcription/ audio capture (mic / WAV), VAD segmenter, Whisper engine, transcript store,
                  service (attaches transcripts to events), model downloader

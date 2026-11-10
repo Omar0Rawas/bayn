@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo:
         env["BAYN_EEG__SOURCE"] = "sim"
         env["BAYN_SIMULATOR__AUTO_GESTURES__ENABLED"] = "true"
-        env.setdefault("BAYN_EVENTS__GESTURE", "both")     # scripted gestures alternate clench / double blink
+        env.setdefault("BAYN_EVENTS__GESTURE", "both")     # scripted gestures alternate clench / triple blink
     if args.source:
         env["BAYN_EEG__SOURCE"] = args.source
     if args.audio:

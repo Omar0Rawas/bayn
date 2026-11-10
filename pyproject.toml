@@ -22,6 +22,7 @@ dependencies = [
   "websockets>=13",
   "brainflow>=5.12",
   "pylsl>=1.16",
+  "scikit-learn>=1.5",
 ]
 
 [project.optional-dependencies]

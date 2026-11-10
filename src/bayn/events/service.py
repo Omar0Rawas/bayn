@@ -10,16 +10,19 @@ events, saved windows and calibration prompts.
 from __future__ import annotations
 
 import logging
+import queue
+import threading
 import time
 
 from bayn.common.bus import CommandReceiver, CommandSender, Publisher, Subscriber
 from bayn.common.config import AppConfig, load_config
 from bayn.common.log import setup_logging
 from bayn.common.schemas import (TOPIC_CALIBRATION, TOPIC_EEG_FILT, TOPIC_EEG_RAW, TOPIC_EEG_STATUS,
-                                 TOPIC_EVENTS_STATUS, EEGChunk)
+                                 TOPIC_EVENTS_STATUS, TOPIC_TRAINING, EEGChunk)
 from bayn.events.detectors import GESTURE_CHOICES
-from bayn.events.manager import INJECT, EventManager
+from bayn.events.manager import INJECT, TRAIN, EventManager
 from bayn.events.store import EventStore
+from bayn.events.training import list_recordings
 
 log = logging.getLogger("bayn.events")
 STATUS_EVERY_S = 0.25
@@ -39,6 +42,8 @@ class EventsService:
         self.can_inject = False
         self._raw: dict[int, EEGChunk] = {}       # raw chunks waiting for their filtered twin
         self._last_status = 0.0
+        self._trained: queue.Queue[dict] = queue.Queue()   # results from the training thread
+        self._training_busy = False
 
     def _ensure_manager(self, fs: float | None = None, channels: list[str] | None = None) -> EventManager:
         fs = fs or (self.manager.fs if self.manager else self.cfg.eeg.fs)
@@ -55,9 +60,37 @@ class EventsService:
         for topic, payload in msgs:
             if topic == INJECT:
                 if self.can_inject:
-                    self.bridge.send({"cmd": "inject", "gesture": payload["gesture"]})
+                    self.bridge.send({"cmd": "inject", **payload})
+            elif topic == TRAIN:
+                self._start_training_thread(payload["profile"], payload["source"])
             else:
                 self.pub.send(topic, payload)
+
+    def _start_training_thread(self, profile: str, source: str) -> None:
+        """Feature extraction + cross-validation take seconds: keep the EEG loop responsive."""
+        if self._training_busy:
+            return
+        self._training_busy = True
+        rule_thr = None             # the old forehead rule's calibrated threshold, for the "before" comparison
+        if self.manager:
+            for d in self.manager.detectors:
+                rule = getattr(d, "rule", d)
+                if d.name == "triple_blink" and getattr(rule, "weights_id", "front") == "front":
+                    rule_thr = getattr(rule, "calibrated_threshold", None)
+
+        def work() -> None:
+            from bayn.events.blink_ml import train_from_sessions
+
+            try:
+                report = train_from_sessions(profile, source, self.cfg.events.triple_blink, rule_thr)
+                self._trained.put({"state": "trained", "report": report, "t": time.time(),
+                                   "prompt": "Blink detector trained"})
+            except Exception as e:   # not enough examples yet, corrupted file, ...
+                log.warning("blink training failed: %s", e)
+                self._trained.put({"state": "train_failed", "t": time.time(), "prompt": str(e),
+                                   "sessions": len(list_recordings(profile, source))})
+
+        threading.Thread(target=work, name="blink-training", daemon=True).start()
 
     def _handle_command(self, c: dict) -> None:
         m = self._ensure_manager()
@@ -74,6 +107,19 @@ class EventsService:
                 self._publish(m.start_calibration())
         elif cmd == "set_gesture" and c.get("gesture") in GESTURE_CHOICES:
             m.set_gesture(c["gesture"])
+        elif cmd == "train":
+            if c.get("action") == "cancel":
+                self._publish(m.cancel_training())
+            elif c.get("action") == "retrain":
+                self._start_training_thread(m.cfg.profile, m.source)
+            elif m.data_now == 0:
+                self.pub.send(TOPIC_TRAINING, {"state": "failed", "t": time.time(),
+                                               "prompt": "No EEG signal yet - connect the headset first"})
+            else:
+                self._publish(m.start_training(c.get("protocol", "standard"),
+                                               condition=c.get("condition", "seated")))
+        elif cmd == "set_blink_method" and c.get("method") in ("auto", "rule", "ml"):
+            m.set_blink_method(c["method"])
         else:
             log.warning("unknown command %s", c)
 
@@ -89,6 +135,12 @@ class EventsService:
                 for c in self.cmd.poll():
                     self._handle_command(c)
                 now = time.time()
+                while not self._trained.empty():           # training thread finished
+                    result = self._trained.get_nowait()
+                    self._training_busy = False
+                    if result["state"] == "trained" and self.manager:
+                        self.manager.load_profile()        # start using the new model right away
+                    self.pub.send(TOPIC_TRAINING, result)
                 if self.manager:
                     self._publish(self.manager.tick(now))
                 if now - self._last_status >= STATUS_EVERY_S:

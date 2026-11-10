@@ -14,7 +14,7 @@ from bayn.common.config import CalibrationConfig
 
 PROMPTS = {
     "clench": "Clench your jaw firmly and hold it",
-    "double_blink": "Blink twice, firmly",
+    "triple_blink": "Blink three times, firmly",
 }
 
 
@@ -31,7 +31,7 @@ class Step:
 @dataclass
 class CalibrationSession:
     cfg: CalibrationConfig
-    gestures: list[str]                       # e.g. ["clench"] or ["clench", "double_blink"]
+    gestures: list[str]                       # e.g. ["clench"] or ["clench", "triple_blink"]
     t0: float
     steps: list[Step] = field(default_factory=list)
     _idx: int = -1
