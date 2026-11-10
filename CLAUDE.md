@@ -5,10 +5,16 @@ Prototype, NOT a medical device. Current status and next steps: docs/PROGRESS.md
 
 ## END GOAL: it must run fine on the demo LAPTOP (user, 2026-11-09)
 Check every change against the laptop, not just the dev PC:
-- CPU-only path works (Whisper small, gemma4:e2b / qwen3:4b) and stays real-time; nothing assumes CUDA.
+- CPU-only path works and keeps up; nothing assumes CUDA. **Demo laptop tested 2026-11-10** (ASUS Vivobook 15,
+  i7-1355U 15 W, 8 GB single-channel RAM, no NVIDIA GPU; user: "satisfactory"): Whisper small + single-encode,
+  gemma4:e2b, triple blink; text 6-10 s after speech, summary ~30 s after the window. Results:
+  docs/BENCHMARK_LAPTOP.md and docs/PROGRESS.md "Demo laptop session" (incl. what to do next on the dev PC).
+- **Memory is the laptop's bottleneck**, not CPU: with Bayn + gemma4:e2b loaded an 8 GB machine has ~1-2 GB left;
+  swapping made Whisper 2-6x slower (D30). Don't add per-process memory (OPENBLAS_NUM_THREADS=1 is set by `bayn run`);
+  the demo runs with only Bayn + one light browser tab open. The 15 W chip is power-limited: more threads don't help.
 - GPU memory budget: Whisper turbo (~2.3 GB) + LLM must fit together (gemma4:e2b measured 3.0 GB VRAM).
-- The model benchmark (docs/BENCHMARK.md) ran on the dev PC; the **demo configuration is re-tested on the laptop**
-  with its own mic (`bayn benchmark ... --profiles cpu`, see docs/PROGRESS.md) before the hackathon.
+- Model benchmarks: dev PC → docs/BENCHMARK.md, demo laptop (`--profiles cpu`) → docs/BENCHMARK_LAPTOP.md
+  (`bayn benchmark report --out ...`; never overwrite the other machine's report).
 - **Disk space**: laptops often have a small C: drive. All models live in the repo's models/ folder
   (models/whisper, models/ollama via OLLAMA_MODELS) and can be copied to the laptop; `doctor` shows sizes + free space.
 - Setup from scratch with one command; offline after setup; `doctor` must flag anything missing.
@@ -34,8 +40,9 @@ Check every change against the laptop, not just the dev PC:
   restarted if they die and the transcriber has a degraded mode (no model → error status, rest keeps running).
 - Summarizer (5580 pub / 5581 cmd): Ollama at 127.0.0.1:11434 (installed on dev PC at
   %LOCALAPPDATA%\Programs\Ollama). Structured output (JSON schema) rendered by code; EEG section written by code,
-  never by the LLM. model auto = gemma4:e2b if NVIDIA >= 6 GB / Apple Silicon / RAM >= 12 GB, else qwen3:4b
-  (chosen by `bayn benchmark`; old qwen2.5 7b/3b scored lower). `think: false` is sent (reasoning models).
+  never by the LLM. model auto = gemma4:e2b if NVIDIA >= 6 GB / Apple Silicon / no NVIDIA GPU and RAM >= 7 GB /
+  small NVIDIA GPU and RAM >= 12 GB, else qwen3:4b (chosen by `bayn benchmark` on both machines; on the laptop
+  gemma4:e2b was 1.7 GB resident, 19 s/summary, 70 % facts vs qwen3:4b 35 s, 45 %). `think: false` is sent.
   Unload models you load for experiments (keep_alive 0) — parked models + Whisper stalled the GPU once (D17).
   Measure prompt/model changes with `bayn benchmark` (corpus recordings) or `bayn eval-summary`, never by eye.
   Never call the `ollama` CLI (it launches the tray app, E6): use `local_server()` from ollama_client.
@@ -44,6 +51,11 @@ Check every change against the laptop, not just the dev PC:
 - Whisper: models/whisper/<name>/ loaded with local_files_only; downloaded only by `bayn models`. auto = large-v3-turbo
   on CUDA (float16, beam 5, live partials), small on CPU (int8, beam 1). CUDA DLLs from pip nvidia-* wheels are added
   via os.add_dll_directory on Windows. Warm-up inference catches cuDNN problems → CPU fallback.
+  Every utterance costs a full 30 s Whisper window, however short. `mixed` normally encodes twice (detect_language +
+  transcribe); `SingleEncodeWhisperEngine` (engine_single.py) reuses the detection pass → identical text, 26-48 %
+  less time on CPU. `transcription.single_encode: auto` = on for CPU, off for CUDA until
+  `python -m bayn.transcription.regress_single --device cuda` passes on the dev PC (pending). Engine comparisons
+  must decode at temperature 0 (`regress_single.greedy`): faster-whisper's fallback samples randomly (E9).
 - Transcription runs continuously; on `events.done` it attaches transcript.txt/json to the event (→ Phase 5 input).
 - Windows PowerShell 5.1 reads .ps1 files as ANSI: keep scripts ASCII; put Arabic text in UTF-8 data files. Events logic lives in `EventManager` (pure, data-time driven → test offline
   with tests/helpers.py `sim_chunks`). Event stream: `events.event` → `events.done` (window saved: starts pipeline).

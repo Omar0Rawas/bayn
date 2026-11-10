@@ -118,7 +118,10 @@ def test_auto_model_depends_on_gpu_and_ram(monkeypatch):
     assert summary_models.resolve_model(SummaryConfig()) == "gemma4:e2b"
     monkeypatch.setattr(summary_models, "gpu_memory_mb", lambda: 4096)        # small GPU, 8 GB RAM: the light model
     assert summary_models.resolve_model(SummaryConfig()) == "qwen3:4b"
-    monkeypatch.setattr(summary_models, "gpu_memory_mb", lambda: 0)           # CPU only
+    monkeypatch.setattr(summary_models, "gpu_memory_mb", lambda: 0)           # CPU only, "8 GB" laptop (7.6):
+    monkeypatch.setattr(summary_models, "system_ram_gb", lambda: 7.6)         # gemma4:e2b (demo laptop benchmark)
+    assert summary_models.resolve_model(SummaryConfig()) == "gemma4:e2b"
+    monkeypatch.setattr(summary_models, "system_ram_gb", lambda: 6.0)         # CPU only, < 7 GB: not measured
     assert summary_models.resolve_model(SummaryConfig()) == "qwen3:4b"
     monkeypatch.setattr(summary_models, "system_ram_gb", lambda: 16.0)        # CPU only, 16 GB RAM
     assert summary_models.resolve_model(SummaryConfig()) == "gemma4:e2b"

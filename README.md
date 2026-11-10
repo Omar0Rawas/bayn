@@ -81,7 +81,7 @@ Requires **Python 3.12+**. No headset is needed for the demo. A microphone is op
 .\bayn run       # real Muse 2 (default source) + mic + dashboard
 .\bayn demo --audio file    # no microphone: plays samples/audio/demo.wav (English + Arabic)
 ```
-Setup also installs **Ollama** (local LLM runtime, via winget on Windows) and downloads the models once: about **7 GB** with an NVIDIA GPU (Whisper large-v3-turbo + CUDA libraries + gemma4:e2b), about **3–5 GB** without one (Whisper small + qwen3:4b, or gemma4:e2b with ≥ 12 GB RAM). After that everything runs offline.
+Setup also installs **Ollama** (local LLM runtime, via winget on Windows) and downloads the models once: about **7 GB** with an NVIDIA GPU (Whisper large-v3-turbo + CUDA libraries + gemma4:e2b), about **5 GB** without one (Whisper small + gemma4:e2b; qwen3:4b below 7 GB RAM). After that everything runs offline.
 `bayn.cmd` works even though Windows blocks PowerShell scripts by default. It bypasses the policy for that one call only, and nothing on your system changes.
 
 ### macOS / Linux
@@ -124,7 +124,7 @@ Bayn transcribes the microphone **continuously**, so speech from *before* an eve
 | **Model** | `auto`: **large-v3-turbo** on an NVIDIA GPU (float16), **small** on CPU (int8). If the GPU fails it falls back to CPU automatically. Override with `transcription.model` |
 | **Languages** | `mixed` (default): each utterance is detected as **Arabic or English**, so you can switch mid-conversation. Also `en`, `ar`, or `auto` (any language). Switch live in the dashboard |
 | **Display** | Arabic shown right-to-left, with language tag and time per segment. Live in-progress text on GPU. Segments inside an event window are highlighted |
-| **Speed (dev PC)** | RTX 2080 Ti: text **~1.3 s after you stop speaking**. CPU (`small`): ~2.4 s per utterance, still keeps up |
+| **Speed** | Dev PC, RTX 2080 Ti: text **~1.3 s after you stop speaking**. Demo laptop (i7-1355U, 8 GB, no GPU, `small`): **~3–8 s per utterance, text 6–10 s after you stop speaking** – usable, not instant. On the CPU, `mixed` mode runs Whisper's encoder once per utterance instead of twice (`transcription.single_encode: auto`), 26–48 % faster with identical text |
 
 **Current limitations** (measured on a live mic, see [TESTING.md](docs/TESTING.md) F2):
 
@@ -148,11 +148,11 @@ When an event's window closes, the transcript of that window is summarised by a 
 
 | | |
 |---|---|
-| **Model** | `auto`: **gemma4:e2b** with an NVIDIA GPU of ≥ 6 GB, Apple Silicon or ≥ 12 GB RAM, else **qwen3:4b**. Chosen with the [model benchmark](docs/BENCHMARK.md). Any Ollama model via `summary.model` |
+| **Model** | `auto`: **gemma4:e2b** with an NVIDIA GPU of ≥ 6 GB, Apple Silicon, no NVIDIA GPU and ≥ 7 GB RAM (8 GB laptops), or a smaller NVIDIA GPU and ≥ 12 GB RAM; else **qwen3:4b**. Chosen with the model benchmark on the [dev PC](docs/BENCHMARK.md) and the [demo laptop](docs/BENCHMARK_LAPTOP.md). Any Ollama model via `summary.model` |
 | **Language** | `auto` = main language of the speech · `en` · `ar` · `both`. Switch in the dashboard. Arabic prompts are written in Arabic |
 | **Format** | Structured output (summary, ≤ 4 key points with times, unclear words), rendered by code, so the format holds in every language |
 | **EEG part** | Written **by code**, not the LLM: dominant rhythm before → after and signal quality per sensor, labelled "not a medical assessment" |
-| **Speed (dev PC)** | RTX 2080 Ti: ~1.6 s per summary (gemma4:e2b). CPU only, 4 threads: ~8 s (gemma4:e2b) / ~19 s (qwen3:4b) |
+| **Speed** | Dev PC, RTX 2080 Ti: ~1.6 s per summary (gemma4:e2b). Demo laptop (CPU only, 8 GB): **~20–28 s** per summary with gemma4:e2b (qwen3:4b: ~35 s and fewer facts) |
 | **Saved** | `data/events/<id>/summary.md` + `summary.json`, downloadable from the timeline. ↻ regenerates |
 
 Quality is measured on real transcripts of recorded speech, recognition errors included ([BENCHMARK.md](docs/BENCHMARK.md), [TESTING.md](docs/TESTING.md)). With Whisper large-v3-turbo, gemma4:e2b covers **81 %** of the key facts (82 % for mixed speech), and its incident summaries contain **no diagnoses**. Summaries can still miss details or embellish slightly. They are always marked as generated from an automatic transcript.
@@ -168,6 +168,15 @@ Everything big lives inside this folder, in `models/` (gitignored), so it never 
 | `.venv/` | Python packages incl. CUDA libraries (NVIDIA only) | ~2.6 GB |
 
 `bayn setup` points Ollama to `models/ollama` through the `OLLAMA_MODELS` user variable, unless you already chose a folder. It also switches off Ollama's cloud features (`OLLAMA_NO_CLOUD=1`). `doctor` shows each folder's size and the free space on its drive, and warns below 5 GB. **For the laptop:** copy the `models/` folder over before running setup, and the downloads are skipped. A CPU-only laptop needs only Whisper `small` plus the summary model `auto` picks there (`bayn models` pulls just that one). The benchmark candidates on the dev PC take much more space and don't need copying. `bayn run` starts Ollama by itself if it isn't running.
+
+### Running on a modest laptop (CPU only, 8 GB RAM)
+
+Measured on the demo laptop (ASUS Vivobook 15, i7-1355U, 8 GB, no NVIDIA GPU; [BENCHMARK_LAPTOP.md](docs/BENCHMARK_LAPTOP.md)). `auto` already picks the right setup there: Whisper **small** on the CPU with one encoder pass per utterance, summaries by **gemma4:e2b**. What matters is **memory**:
+
+- **Close everything else** (IDE, Chrome, Steam, Teams…). With Bayn and gemma4:e2b loaded, an 8 GB machine has little to spare; when Windows starts swapping, the transcript falls 10–35 s behind.
+- Start from a terminal with `.ayn run --no-browser` and open http://127.0.0.1:8080 in one light browser tab (e.g. Edge).
+- **Wait ~30 s** after start (the summary model loads from disk) before speaking, and switch the Muse on **before** starting, so it connects quickly.
+- Expect text **6–10 s** after you stop speaking and a summary **~30 s** after an event window closes.
 
 ## Configuration
 

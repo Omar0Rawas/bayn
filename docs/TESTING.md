@@ -143,14 +143,17 @@ The four Whisper tests are skipped if the `tiny` model isn't downloaded (`bayn m
 
 ## 3. Test environment
 
-| | Dev PC (tested) | Demo laptop |
+| | Dev PC (tested) | Demo laptop (ASUS Vivobook 15 X1504VA, scanned 2026-11-10) |
 |---|---|---|
-| Microphone | TC-Helicon GoXLR Mini "Chat Mic" (default input) | TBD: `bayn mics` |
-| Whisper | large-v3-turbo on CUDA (cuDNN 9, CTranslate2 4.8.5); small + tiny also on disk | auto: GPU model if NVIDIA, else small |
-| OS | Windows 10 Pro 19045 | TBD: run `doctor` + hardware tests before the event |
-| Python | 3.13.7 | ≥ 3.12 required |
-| GPU | NVIDIA RTX 2080 Ti 11 GB | unknown, auto-detected |
-| Bluetooth | USB dongle (Actions ATS2851, vendor driver); built-in QCA61x4A disabled | TBD |
+| CPU / RAM | AMD Ryzen 7 5800X3D (8 cores / 16 threads), desktop | Intel Core i7-1355U (2 P + 8 E cores, 12 threads, 15 W); **7.6 GB RAM, one 8 GB DDR4-3200 module (single channel)**; ~2.2 GB available with VS Code open |
+| Power | desktop | plugged in, Balanced plan with the "Best performance" power mode (AC and battery); battery saver off |
+| Disk | models on H: | one drive C:, 328 GB free |
+| Microphone | TC-Helicon GoXLR Mini "Chat Mic" (default input) | **wireless lavalier, USB 2.4 GHz receiver "USBAudio1.0"** (not Bluetooth), `audio.device` in config/local.yaml; 16 kHz, noise-gated, SNR ~72 dB, peak -1.8 dBFS (little headroom) |
+| Whisper | large-v3-turbo on CUDA (cuDNN 9, CTranslate2 4.8.5); small + tiny also on disk | CPU only; chosen by the laptop benchmark (step 5) |
+| OS | Windows 10 Pro 19045 | Windows 11 Home 26200 |
+| Python | 3.13.7 | 3.13.7 |
+| GPU | NVIDIA RTX 2080 Ti 11 GB | none (Intel UHD integrated) → CPU-only path |
+| Bluetooth | USB dongle (Actions ATS2851, vendor driver); built-in QCA61x4A disabled | built-in Intel Wireless Bluetooth, the only adapter; working (`doctor`: 6 BLE devices visible). Paired: soundcore Q20i headphones |
 | Headset | Muse 2 `Muse-3EE1` | same |
 | Mains | 60 Hz (measured) | measured automatically |
 
@@ -282,7 +285,7 @@ Scores are computed by `bayn.transcription.metrics` (normalised: diacritics, ham
 | Prompts: language detection, rules, JSON example (unrelated topic), relative times, Arabic prompt in Arabic, schema caps key points | Unit | structure as designed | ✅ |
 | Rendering: localised headings, **partial JSON rendered while streaming**, EEG section by code, disclaimer | Unit | correct for en/ar | ✅ |
 | Quality checks: facts, flips, wrong language, facts limited to what the transcript contains | Unit | catches each failure type | ✅ |
-| `auto` model choice (updated after the benchmark): GPU ≥ 6 GB or RAM ≥ 12 GB → gemma4:e2b, else qwen3:4b, fall back to what's pulled | Unit | as designed | ✅ |
+| `auto` model choice (updated after the benchmark): GPU ≥ 6 GB, or no NVIDIA GPU and RAM ≥ 7 GB (demo laptop, 2026-11-10), or a small GPU and RAM ≥ 12 GB → gemma4:e2b, else qwen3:4b, fall back to what's pulled | Unit | as designed | ✅ |
 | Ollama client against a fake server: streaming, JSON schema sent, error lines, unreachable server, **stalled model times out** | Integration | errors surface as `OllamaError` | ✅ |
 | Service: both languages streamed and saved (`summary.md/json`), event row updated, no-speech without an LLM call, LLM failure reported after one retry | Integration | as designed | ✅ |
 | Real model (Ollama running): English classroom scenario | Integration | ≥ 60 % facts, nothing invented, right language and format | ✅ qwen2.5:7b · ✅ gemma4:e2b (2026-11-10) |
@@ -325,7 +328,7 @@ Scores are computed by `bayn.transcription.metrics` (normalised: diacritics, ham
 No model put a diagnosis into an incident summary, except one gemma3:1b summary. Each case ran once, so differences of a few points are noise.
 
 **Decisions:**
-- **Summary model `auto`:** `gemma4:e2b` with an NVIDIA GPU ≥ 6 GB, Apple Silicon, or ≥ 12 GB RAM. It is the best measured on real transcripts, especially mixed speech, where it understands English terms that Whisper wrote in Arabic letters. It is also lighter on the GPU than qwen2.5:7b and the fastest 4B-class model on a CPU. Otherwise `qwen3:4b` (3.1 GB RAM), which fits an 8 GB laptop.
+- **Summary model `auto`:** `gemma4:e2b` with an NVIDIA GPU ≥ 6 GB, Apple Silicon, no NVIDIA GPU and ≥ 7 GB RAM (added after the demo-laptop benchmark, 2026-11-10: 1.7 GB resident, 19 s per summary, 70 % vs 45 % facts via Whisper small against qwen3:4b; docs/BENCHMARK_LAPTOP.md), or a smaller NVIDIA GPU and ≥ 12 GB RAM. It is the best measured on real transcripts, especially mixed speech, where it understands English terms that Whisper wrote in Arabic letters. It is also lighter on the GPU than qwen2.5:7b and the fastest 4B-class model on a CPU. Otherwise `qwen3:4b` (< 7 GB RAM, or a small GPU with < 12 GB RAM; not measured there).
 - **Whisper `auto` unchanged:** turbo on a GPU, small on the CPU. Small is the only accurate model that keeps up live on 4 CPU threads; medium (RTF 0.95) may keep up on a laptop with more cores, to be checked there.
 - **To re-test on the demo laptop** (user, 2026-11-10): the same benchmark with the laptop's own microphone and the `cpu` profile (all cores). The demo configuration is chosen from those numbers.
 
@@ -456,6 +459,14 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | Laptop checklist (Bluetooth, mic, GPU/CPU, ports, models) | `doctor` covers each item |
 | README quickstart followed literally | works without undocumented steps |
 
+**Demo laptop, clean machine (2026-11-10):** `.\bayn setup` ran unattended (venv, CPU-only deps, Whisper small + tiny, Ollama 0.40.15 via winget, qwen3:4b) and `doctor` reported "ready", but the summary model landed outside `models\` (D27, fixed). `doctor`'s only warning: Bluetooth radio switched off.
+
+**Demo laptop, step 6 (2026-11-10):** end to end under demo conditions (plain terminal, VS Code closed, real Muse, wireless mic): user-accepted ("the blink works well enough"). 2 triple-blink events, none reported as false, in ~5 min with the headset on; summaries en 19.7 s / ar 28.0 s in the LLM (27 / 37 s after the window closed), both accurate, nothing invented; live lines 6-10 s after speech (target 2-3 s not met; accepted). Fixes during the step: D30. Audio + Muse together for 6 min: no audio warnings. Pending: Wi-Fi-off offline run.
+
+**Demo laptop, wrap-up (2026-11-10):** the measured setup became `auto` for CPU-only machines (summary rule ≥ 7 GB RAM, `transcription.single_encode: auto` = on for CPU, off for CUDA until the dev-PC GPU regression). Full suite on the laptop: **214 passed, 3 skipped** (headset ×2, real LLM without Ollama running). New tests: `test_transcription_single.py` (×7 incl. `test_auto_is_off_on_cuda`), `test_report_on_a_machine_without_gpu_uses_the_cpu_runs`; `test_auto_model_depends_on_gpu_and_ram` extended (7.6 GB CPU-only → gemma4:e2b, 6 GB → qwen3:4b). Not yet run on the laptop: `-m hardware`, the real-LLM test, the step 7 drills.
+
+**Demo laptop, step 5 (2026-11-10):** `benchmark stt|mem|llm --profile(s) cpu` → docs/BENCHMARK_LAPTOP.md (D28 fixed in the report generator). New: `SingleEncodeWhisperEngine` (engine_single.py, not live) + `regress_single`: 0 decode mismatches vs the original engine on base / small / medium / turbo over 37 real utterances, 26-48 % less Whisper time (details: PROGRESS.md). +4 integration tests (`tests/test_transcription_single.py` ×3, `test_report_on_a_machine_without_gpu_uses_the_cpu_runs`).
+
 ### Phase 8: Full end-to-end test run (planned)
 
 | Run | Acceptance criterion |
@@ -526,6 +537,10 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | D20 | Benchmark (reading summaries) | English summaries flagged "wrong language" | The "Unclear" section quotes Arabic fragments verbatim, which is its purpose | Language judged on the summary and key points only | `test_quality_check_*` |
 | D21 | Benchmark (reading summaries) | A summary saying "40 years" (Whisper misheard "forty seconds") was credited with the duration fact; Arabic summaries using Whisper's Arabic-letter English terms (النيوكليوس) were not credited | Fact keywords too loose (number alone) and too strict (no transliterations) | Duration needs the unit; Arabic facts accept recognisable transliteration stems | `test_reading_the_script_back_covers_every_fact_and_nothing_forbidden` |
 | D26 | Building the decision test | The rule on the learned signal fired on double blinks (6 false triggers) | Learning the rule threshold needs rest periods; the noisy session has none, so a fold trained on it got no threshold and fell back to 90 µV (blinks there are ~500 µV) | Natural-sitting activity counts as rest → 86 % caught, 0.41 false/min, and no double blink fires | decision test report |
+| D27 | `bayn setup` on the clean demo laptop (2026-11-10) | Setup said "ready", but `models\ollama` didn't exist; the summary model was in `~\.ollama\models`. After a reboot (or with no tray app running) Bayn's own `ollama serve` would find no model | The Ollama installer launches its tray app; its server started before setup set `OLLAMA_MODELS`, and setup's pull went through that server into the default folder | Setup sets `OLLAMA_MODELS` / `OLLAMA_NO_CLOUD` before installing Ollama and stops the tray app the installer launched. Laptop: model moved into `models\ollama` (no re-download), checked through `local_server()` | manual (laptop) |
+| D28 | `benchmark report --out docs/BENCHMARK_LAPTOP.md` on the demo laptop (2026-11-10) | The laptop report said "results are from the dev PC", sections 2 and 3 were empty and section 5 found no combination, although 192 CPU summaries were measured; section 4's speed came from one arbitrary transcript source | The report used only `gpu`-profile LLM runs for quality (CPU profiles were speed-only on the dev PC) and kept the last cached file per (profile, model) | Quality comes from `gpu` runs when there are any, else from the CPU profile (`quality_profile`); CPU speed is over all sources (`cpu_speed`). Dev-PC output unchanged | `test_report_on_a_machine_without_gpu_uses_the_cpu_runs` |
+| D29 | Full suite on the demo laptop (2026-11-10) | 2 system tests failed (no clench event; calibration results without `clench`) | The test stack pins its config with env vars but not the gesture, so the laptop's config/local.yaml (`events.gesture: triple_blink`) leaked in | `running_stack` sets `BAYN_EVENTS__GESTURE=clench` → 210 passed, 3 skipped (headset ×2, real LLM) | `test_gesture_event_saved_and_downloadable`, `test_guided_calibration_with_simulator` |
+| D30 | Step 6 on the demo laptop (8 GB), live mic (2026-11-10) | Transcript lines 12-35 s behind speech; Whisper 8-34 s per utterance live vs 5 s offline on the same speech | Memory: ~1-2 GB available with gemma4:e2b loaded, browser and dev tools open, so Windows paged constantly (one 22 s stall at 12 MB available). Each light Bayn service also committed ~785 MB (numpy + scipy OpenBLAS per-thread buffers), system commit 22 / 24.9 GB | `bayn run` sets `OPENBLAS_NUM_THREADS=1` (~90 MB per service); opt-in `transcription.single_encode` (on for the laptop): 2.7-3.7 s per utterance after the model load; demo with only Bayn + a light browser open | `test_service_uses_the_engine_the_config_asks_for`, replay run (PROGRESS.md) |
 | D25 | Real headset sessions (user: "still not very accurate") | Rule 12/28 and ML 10/28 triple blinks caught | The blink signal was the AF7/AF8 average, but on the Muse blinks are largest on TP9/TP10 (forehead reference) and AF8 is noisy, so the average was close to the weakest view of the blinks | Blink signal learned per person from their labelled blinks; synthetic training data from their own blinks → ML 23/28, 0.81 false/min held-out | `test_learned_weights_find_the_persons_blink_pattern`, `test_trained_model_moves_the_rule_onto_the_learned_signal` |
 | D24 | Switching the trigger to three blinks (simulator) | The rule missed 4–5 of 30 triple blinks | Each blink's 0.3 Hz high-pass rebound pulls the baseline down; the third blink of a fast series rose 170 µV but only reached +87 µV, under the 90 µV threshold. Two blinks overlapping without returning to baseline also merged | Inside a series, a blink counts by its rise from the dip before it (and must cross zero); a peak also ends on a 40 % dip; stray weaker blinks (< 45 % of the largest) aren't counted → 29/30 | `test_triple_blink_detection_rate`, `test_single_and_double_blinks_do_not_fire` |
 | D23 | Phase 6, checking the candidate finder on real Muse windows | The ML finder saw only 37 peaks in 10 min of real EEG (natural blinking gives > 100) | Its threshold was 5 × noise; real forehead noise is 22–87 µV (simulator ~10 µV), so the threshold reached 110–430 µV, above many real blinks | 3 × noise, kept between 30 and 100 µV → 5–18 candidates per 40 s window, in line with blink rates | `test_finder_groups_a_double_blink_into_one_episode`, re-run on the real windows |
@@ -554,6 +569,8 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | E6 | `ollama list` with no server running started the Ollama **tray app**, which ignored the model folder (stale environment) and failed to start its server | Never call the `ollama` CLI from Bayn; `local_server()` starts `ollama serve` with the right environment for every tool (run, models, eval, benchmark) |
 | E7 | Ollama's `/api/ps` reports Gemma 4 E2B/E4B as 0.2 GB, but they really use 3.0 / 4.8 GB of GPU memory | The benchmark measures memory from outside (GPU driver, process RAM) |
 | E3 | Muse powers itself off when idle and unconnected, so a test run 25 min later found nothing | Turn it on right before testing; `doctor` shows whether it is advertising |
+| E8 | Demo laptop (i7-1355U, 15 W): Whisper speed doesn't change with 4, 6, 10 or 12 threads; clock ~2.0-2.4 GHz under load with the MyASUS fan profile already on "Performance" | Power-limited chip: speed has to come from doing less work (one encoder pass per utterance, `engine_single.py`), not from threads |
+| E9 | faster-whisper retries a greedy decode that fails its quality checks with random sampling (temperature fallback): on garbled Arabic (base / medium) the original engine gave 3 different texts in 3 runs of the same utterance | Engine comparisons re-decode differing utterances at temperature 0 (`regress_single.greedy`); live app unchanged |
 
 ---
 

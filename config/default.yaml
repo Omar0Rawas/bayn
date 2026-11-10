@@ -100,6 +100,10 @@ transcription:
   initial_prompt: none     # none | auto (code-switched Hejazi/English style hint) | any custom text
   beam_size: auto          # auto = 5 on GPU, 1 on CPU (faster)
   cpu_threads: auto        # CPU threads for Whisper: auto = all but 2 (leaves room for EEG + dashboard)
+  single_encode: auto      # run Whisper's encoder once per utterance in `mixed` mode instead of twice (same
+                           # text; 26-48 % less Whisper time on the demo laptop's CPU). auto = on when Whisper
+                           # runs on the CPU, off on CUDA until regression-tested on a GPU:
+                           # python -m bayn.transcription.regress_single --device cuda   | true | false
   vad_threshold: 0.5      # Silero speech probability
   min_silence_s: 0.6       # pause that ends an utterance
   max_utterance_s: 15      # force a cut in long monologues
@@ -109,8 +113,9 @@ transcription:
   event_tail_s: 4          # finish a sentence that runs past the window end (up to this long)
 
 summary:
-  model: auto              # auto = gemma4:e2b with an NVIDIA GPU >= 6 GB, Apple Silicon or >= 12 GB RAM,
-                           # else qwen3:4b (docs/BENCHMARK.md). Or any Ollama model; compare with `bayn benchmark`
+  model: auto              # auto = gemma4:e2b with an NVIDIA GPU >= 6 GB, Apple Silicon, no NVIDIA GPU and
+                           # >= 7 GB RAM (8 GB laptops, docs/BENCHMARK_LAPTOP.md), or a smaller NVIDIA GPU and
+                           # >= 12 GB RAM; else qwen3:4b. Or any Ollama model; compare with `bayn benchmark`
   host: http://127.0.0.1:11434   # local Ollama server (never a cloud endpoint)
   language: auto           # auto = main language of the transcript | en | ar | both
   temperature: 0.2

@@ -155,6 +155,8 @@ class TranscriptionConfig(BaseModel):
     initial_prompt: str = "none"
     beam_size: int | Literal["auto"] = "auto"
     cpu_threads: int | Literal["auto"] = "auto"
+    single_encode: bool | Literal["auto"] = "auto"   # one encoder pass per utterance in mixed mode
+                                                     # (engine_single.py); auto = on when Whisper runs on the CPU
     vad_threshold: float = 0.5
     min_silence_s: float = 0.6
     max_utterance_s: float = 15.0

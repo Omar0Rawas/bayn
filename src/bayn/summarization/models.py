@@ -3,13 +3,14 @@
     python -m bayn.summarization.models          # pull the model 'auto' picks here
     python -m bayn.summarization.models --all    # pull both (e.g. before moving to a laptop)
 
-auto (measured on the recorded corpus, docs/BENCHMARK.md):
-  gemma4:e2b  with an NVIDIA GPU of >= 6 GB, Apple Silicon, or >= 12 GB RAM: best measured quality
-              (77-83 % of facts on real transcripts, also understands English terms that Whisper wrote
-              in Arabic letters), 3.0 GB on the GPU, ~8 s per summary on 4 CPU threads (4.7 GB RAM).
-  qwen3:4b    otherwise (8 GB laptops): 3.1 GB RAM, 61 % of facts, ~19 s on 4 CPU threads.
+auto (measured on the recorded corpus, docs/BENCHMARK.md and docs/BENCHMARK_LAPTOP.md):
+  gemma4:e2b  with an NVIDIA GPU of >= 6 GB, Apple Silicon, no NVIDIA GPU and >= 7 GB RAM (8 GB laptops),
+              or a smaller NVIDIA GPU and >= 12 GB RAM: best measured quality (77-83 % of facts on real
+              transcripts on the dev PC; 70 % via Whisper small on the demo laptop's CPU), 3.0 GB on the GPU;
+              on the demo laptop (i7-1355U, 8 GB) ~1.7 GB resident RAM, ~19 s per summary.
+  qwen3:4b    otherwise (< 7 GB RAM, or a small NVIDIA GPU with < 12 GB RAM): not measured there.
+              On the demo laptop it was worse (45 % facts via small, 35 s per summary, 19/96 empty summaries).
 Previous defaults: qwen2.5:7b (68 %, 4.8 GB) and qwen2.5:3b (44-52 %).
-To be re-checked on the demo laptop (`bayn benchmark ... --profiles cpu`).
 """
 
 from __future__ import annotations
@@ -75,13 +76,23 @@ def system_ram_gb() -> float:
 
 
 # Whisper (turbo ~2.3 GB) and the LLM share the GPU: gemma4:e2b (~3.0 GB measured) fits a 6 GB GPU with
-# Whisper small, an 8 GB GPU with turbo. Without such a GPU it runs on the CPU and needs ~4.7 GB of RAM.
+# Whisper small, an 8 GB GPU with turbo.
 GPU_MB_FOR_LARGE = 6_000
+# No NVIDIA GPU (demo laptop, 8 GB RAM, docs/BENCHMARK_LAPTOP.md): gemma4:e2b keeps only ~1.7 GB resident (its
+# per-layer embedding tables are memory-mapped; the dev PC showed 4.7 GB only because it had RAM to spare), is
+# ~2x faster than qwen3:4b (19 vs 35 s per summary) and finds more facts on every transcript (small: 70 vs 45 %).
+# An "8 GB" machine reports ~7.6 GB, hence 7. Below that: not measured, keep qwen3:4b.
+RAM_GB_FOR_LARGE_CPU_ONLY = 7
+# With a small NVIDIA GPU (< 6 GB) Ollama would split the model across a GPU that Whisper already uses: not
+# measured, so the old, cautious threshold stays.
 RAM_GB_FOR_LARGE = 12
 
 
 def auto_model() -> str:
-    if gpu_memory_mb() >= GPU_MB_FOR_LARGE or apple_silicon_memory_gb() >= 8 or system_ram_gb() >= RAM_GB_FOR_LARGE:
+    gpu = gpu_memory_mb()
+    if gpu >= GPU_MB_FOR_LARGE or apple_silicon_memory_gb() >= 8:
+        return LARGE
+    if system_ram_gb() >= (RAM_GB_FOR_LARGE if gpu else RAM_GB_FOR_LARGE_CPU_ONLY):
         return LARGE
     return SMALL
 

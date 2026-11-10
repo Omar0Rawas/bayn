@@ -2,6 +2,8 @@
 
 This brief is for the Claude Code session on the **demo laptop**. The user pastes the prompt below into a fresh session after cloning the repo. The dev-PC sessions wrote it on 2026-11-10, after Phase 6.
 
+> **Done 2026-11-10 (steps 1-6; user: "satisfactory").** Results, the demo configuration, the code changes and what is still open (Wi-Fi-off check, step 7 drills, the GPU regression on the dev PC): docs/PROGRESS.md "Demo laptop session"; benchmark: docs/BENCHMARK_LAPTOP.md. For a later laptop visit, run only what that section lists as open.
+
 ## Before the session (done by the user)
 
 1. Install **Git** and **Python 3.12+**: `winget install Git.Git Python.Python.3.12` (or python.org; tick "Add to PATH").

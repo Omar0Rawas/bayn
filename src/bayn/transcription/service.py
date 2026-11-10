@@ -23,6 +23,7 @@ from bayn.common.schemas import (TOPIC_AUDIO_PCM, TOPIC_EVENT_DONE, TOPIC_TRANSC
                                  TOPIC_TRANSCRIPT_STATUS, TOPIC_TRANSCRIPT_WINDOW, AudioChunk)
 from bayn.events.store import EventStore
 from bayn.transcription.engine import WhisperEngine, silero_vad
+from bayn.transcription.engine_single import SingleEncodeWhisperEngine
 from bayn.transcription.segmenter import Segmenter, Utterance
 from bayn.transcription.store import TranscriptStore, format_transcript
 
@@ -49,7 +50,8 @@ class TranscriptionService:
         self.language = tc.language
         self._status("loading", "loading Whisper model...")
         try:
-            self.engine = engine or WhisperEngine(tc)
+            # the copy decides itself (auto: only on the CPU) once it knows where Whisper loaded
+            self.engine = engine or (WhisperEngine if tc.single_encode is False else SingleEncodeWhisperEngine)(tc)
         except Exception:
             self.pub.close()          # free the port for degraded mode
             raise

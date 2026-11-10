@@ -116,3 +116,27 @@ def test_llm_stage_report_and_recommendation(bench_dirs, monkeypatch):
     rec = {t: (w, m) for t, w, m, _ in bench.recommend(*bench.load_results())}
     assert rec["NVIDIA GPU with 4 GB"] == ("small", "qwen2.5:3b")          # 1000 MB + 2048 MB fits 3300
     assert rec["CPU only, 8 GB RAM"] == ("small", "qwen2.5:3b")            # 900 MB + 3072 MB fits 4500
+
+
+@pytest.mark.integration
+def test_report_on_a_machine_without_gpu_uses_the_cpu_runs(bench_dirs, monkeypatch):
+    """Demo laptop: no gpu profile at all, so summary quality (sections 2, 3, 5) comes from the cpu runs."""
+    fake = FakeOllama(models=("qwen2.5:3b",))
+    monkeypatch.setenv("BAYN_SUMMARY__HOST", fake.url)
+    try:
+        _fake_stt("cpu", "small", rtf=0.3, vram=None, ram=600)
+        _fake_stt("cpu", "medium", rtf=1.5, vram=None, ram=2000)          # too slow for a CPU recommendation
+        assert bench.run_llm(argparse.Namespace(models=["qwen2.5:3b"], sources=["all"], profile="cpu",
+                                                scripts=None, langs=["en"], force=False)) == 0
+    finally:
+        fake.close()
+    stt, llm = bench.load_results()
+    assert bench.quality_profile(llm) == "cpu"
+    md = bench.render_report()
+    assert "dev PC" not in md and "## 3. Whisper × LLM" in md
+    sec2 = md.split("## 2.")[1].split("## 3.")[0]
+    assert "| qwen2.5:3b |" in sec2 and "Time (cpu)" in sec2
+    assert "| 6 |" in md.split("## 4.")[1]                                 # speed over all 3 sources × 2 scripts
+    rec = {t: (w, m) for t, w, m, _ in bench.recommend(stt, llm)}
+    assert rec["CPU only, 8 GB RAM"] == ("small", "qwen2.5:3b")
+    assert rec["NVIDIA GPU with 4 GB"][0] == "–"

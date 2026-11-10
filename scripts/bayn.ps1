@@ -56,20 +56,26 @@ switch ($Task) {
     if (-not (Test-Path .env)) { Copy-Item .env.example .env }
     Write-Host "Downloading Whisper models (one time)..."
     & $Py -m bayn.transcription.models
-    if (-not (Get-Command ollama -ErrorAction SilentlyContinue) -and -not (Test-Path "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe")) {
-      if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Host "Installing Ollama (local LLM runtime)..."
-        winget install --id Ollama.Ollama -e --silent --accept-source-agreements --accept-package-agreements
-      } else { Write-Host "Install Ollama from https://ollama.com, then run: .\bayn models" }
-    }
     # Keep Ollama's models next to the Whisper models (in this folder), not on a possibly small C: drive,
     # unless the user already chose a location. Also keep Ollama local-only (no ollama.com cloud features).
+    # Set BEFORE installing Ollama (D27): the installer starts the tray app, whose server would otherwise
+    # pull the summary model into the default folder (~\.ollama\models).
     if (-not [Environment]::GetEnvironmentVariable("OLLAMA_MODELS", "User")) {
       $om = Join-Path $Root "models\ollama"
       [Environment]::SetEnvironmentVariable("OLLAMA_MODELS", $om, "User"); $env:OLLAMA_MODELS = $om
       Write-Host "Ollama models will be stored in $om"
-    }
+    } else { $env:OLLAMA_MODELS = [Environment]::GetEnvironmentVariable("OLLAMA_MODELS", "User") }
     [Environment]::SetEnvironmentVariable("OLLAMA_NO_CLOUD", "1", "User"); $env:OLLAMA_NO_CLOUD = "1"
+    if (-not (Get-Command ollama -ErrorAction SilentlyContinue) -and -not (Test-Path "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe")) {
+      if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "Installing Ollama (local LLM runtime)..."
+        winget install --id Ollama.Ollama -e --silent --accept-source-agreements --accept-package-agreements
+        # The installer launches the tray app with its own environment (D27). Bayn starts `ollama serve`
+        # itself with the right model folder, so stop the tray app and its server here.
+        Start-Sleep -Seconds 3
+        try { Get-Process -Name "ollama app", "ollama" -ErrorAction Stop | Stop-Process -Force } catch { }
+      } else { Write-Host "Install Ollama from https://ollama.com, then run: .\bayn models" }
+    }
     Write-Host "Downloading the summary model (one time)..."
     & $Py -m bayn.summarization.models
     & $Py -m bayn.doctor

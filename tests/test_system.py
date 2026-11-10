@@ -58,6 +58,8 @@ def running_stack(tmp_path):
                BAYN_SIMULATOR__SEED="5", BAYN_SIMULATOR__MAINS_HZ="60",
                BAYN_SIMULATOR__NATURAL_BLINKS="false", BAYN_SIMULATOR__NATURAL_EMG="false",
                BAYN_SIMULATOR__AUTO_GESTURES__ENABLED="false", BAYN_LOGGING__LEVEL="WARNING",
+               BAYN_EVENTS__GESTURE="clench",       # these tests inject clenches; config/local.yaml may say otherwise
+
                # short windows / calibration so the test runs in seconds
                BAYN_EVENTS__PRE_S="2", BAYN_EVENTS__POST_S="3", BAYN_EVENTS__COOLDOWN_S="3",
                BAYN_EVENTS__CALIBRATION__REST_S="5", BAYN_EVENTS__CALIBRATION__REPS="2",

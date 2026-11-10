@@ -45,6 +45,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     env = dict(os.environ)
+    # numpy's and scipy's OpenBLAS each reserve per-thread buffers at import: ~785 MB committed per service on a
+    # 12-thread laptop (77 MB with one thread). Bayn's services do no heavy linear algebra (Whisper uses
+    # CTranslate2's own threads, the LLM runs in Ollama), and an 8 GB laptop neared its commit limit (step 6).
+    env.setdefault("OPENBLAS_NUM_THREADS", "1")
     if args.demo:
         env["BAYN_EEG__SOURCE"] = "sim"
         env["BAYN_SIMULATOR__AUTO_GESTURES__ENABLED"] = "true"
