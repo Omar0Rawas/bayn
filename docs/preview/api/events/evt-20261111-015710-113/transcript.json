@@ -1,0 +1,83 @@
+{
+  "event_id": "evt-20261111-015710-113",
+  "t_event": 1794351430.113131,
+  "t0": 1794351420.113131,
+  "t1": 1794351460.113131,
+  "segments": [
+    {
+      "id": "d0aef0b96703-0",
+      "utterance_id": "d0aef0b96703",
+      "t_start": 1794351424.4033864,
+      "t_end": 1794351428.1633863,
+      "text": "it's 10 20 sarah stopped answering in the middle of the reading",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 4.14
+    },
+    {
+      "id": "d0aef0b96703-1",
+      "utterance_id": "d0aef0b96703",
+      "t_start": 1794351428.1633863,
+      "t_end": 1794351431.1233864,
+      "text": "she's staring at the board and she's not responding to her name",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 4.14
+    },
+    {
+      "id": "d0aef0b96703-2",
+      "utterance_id": "d0aef0b96703",
+      "t_start": 1794351431.1233864,
+      "t_end": 1794351434.0833864,
+      "text": "her lips are moving like small chewing movements",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 4.14
+    },
+    {
+      "id": "d0aef0b96703-3",
+      "utterance_id": "d0aef0b96703",
+      "t_start": 1794351434.0833864,
+      "t_end": 1794351436.3873863,
+      "text": "and her left hand is fidgeting with her pencil",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 4.14
+    },
+    {
+      "id": "7e8dcfb11c5d-0",
+      "utterance_id": "7e8dcfb11c5d",
+      "t_start": 1794351436.4993863,
+      "t_end": 1794351443.0593863,
+      "text": "I'm timing it now. About 40 seconds have passed. She didn't fall. She's still sitting in her chair.",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 1.47
+    },
+    {
+      "id": "7e8dcfb11c5d-1",
+      "utterance_id": "7e8dcfb11c5d",
+      "t_start": 1794351443.0593863,
+      "t_end": 1794351447.4593863,
+      "text": "Okay, she's blinking now and looking around. She says she feels tired and she doesn't remember",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 1.47
+    },
+    {
+      "id": "7e8dcfb11c5d-2",
+      "utterance_id": "7e8dcfb11c5d",
+      "t_start": 1794351447.4593863,
+      "t_end": 1794351451.0113864,
+      "text": "the last minute. Ahmed, please go call the school nurse.",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 1.47
+    }
+  ],
+  "text": "[-005.7 s] (en) it's 10 20 sarah stopped answering in the middle of the reading\n[-001.9 s] (en) she's staring at the board and she's not responding to her name\n[+001.0 s] (en) her lips are moving like small chewing movements\n[+004.0 s] (en) and her left hand is fidgeting with her pencil\n[+006.4 s] (en) I'm timing it now. About 40 seconds have passed. She didn't fall. She's still sitting in her chair.\n[+012.9 s] (en) Okay, she's blinking now and looking around. She says she feels tired and she doesn't remember\n[+017.3 s] (en) the last minute. Ahmed, please go call the school nurse.",
+  "languages": [
+    "en"
+  ],
+  "n_segments": 7
+}

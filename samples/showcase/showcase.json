@@ -1,0 +1,38 @@
+{
+  "_about": "The `bayn showcase` tour: simulated EEG + these recordings (a team member reading the fictional corpus scripts, tests/data/corpus.json, through the wireless demo mic). Times in seconds. trigger_at_s is relative to the start of the scene's audio (negative = before it: the seizure clip needs EEG lead time). after_s = silence after the audio, so each event's window (-10/+30 s) holds only its own scene.",
+  "lead_s": 4,
+  "scenes": [
+    {
+      "title": "Jaw clench · Arabic",
+      "caption": "A teacher describes a pupil's episode in Arabic and clenches their jaw to mark it. Bayn saves the EEG from 10 s before to 30 s after, transcribes what was said and writes a summary.",
+      "audio": "ar-incident.wav",
+      "trigger": "clench",
+      "trigger_at_s": 9,
+      "after_s": 14
+    },
+    {
+      "title": "Button · English",
+      "caption": "No gesture needed: the Trigger button (or the T key) does exactly the same.",
+      "audio": "en-incident.wav",
+      "trigger": "manual",
+      "trigger_at_s": 9,
+      "after_s": 14
+    },
+    {
+      "title": "Triple blink · Arabic with English terms",
+      "caption": "Three firm blinks trigger it hands-free. The speech mixes Arabic with English terms, and each utterance is transcribed in its own language.",
+      "audio": "mx-incident.wav",
+      "trigger": "triple_blink",
+      "trigger_at_s": 9,
+      "after_s": 14
+    },
+    {
+      "title": "Seizure socket · mock model",
+      "caption": "Nobody triggers this one. A replayed hospital EEG clip (CHB-MIT) contains a seizure, and the mock model in the detector socket flags it while the lesson goes on. Not validated on Muse data, not a diagnosis.",
+      "audio": "en-plants.wav",
+      "trigger": "seizure",
+      "trigger_at_s": -12,
+      "after_s": 30
+    }
+  ]
+}

@@ -188,6 +188,8 @@ class BusConfig(BaseModel):
     sum_host: str = "127.0.0.1"
     sum_pub_port: int = 5580
     sum_cmd_port: int = 5581
+    showcase_host: str = "127.0.0.1"
+    showcase_pub_port: int = 5590
 
 
 class SummaryConfig(BaseModel):

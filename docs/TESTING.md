@@ -502,6 +502,33 @@ session"). Without them a real Muse fell back to the forehead (AF7/AF8) signal: 
 | Calibrate replacing training on real sessions | Offline evaluation | report | **66 % / 0.52 per min vs 67 % / 0.30 trained** (above) |
 | On the headset, fresh profile: Calibrate, then triple blinks | User test | works | ✅ (2026-11-11: "all good") |
 
+### Showcase and recorded preview for judges (2026-11-11) ✅ software, dev PC · ✅ user review
+
+**Goal** (user): "streamline it so testing and demoing is easy for whoever downloads the repo (judges)", with "a way
+for judges to preview as much as possible". The speech is the user's wireless-mic corpus recordings (user: "those can
+be public").
+- `.\bayn showcase`: simulated EEG + one stitched WAV of 4 scenes (samples/showcase/showcase.json); a driver process
+  (bayn.showcase) follows the audio's position on the bus, fires each scene's trigger, switches the dashboard's trigger
+  setting to match, and publishes the scene caption (new topic `showcase.scene`, port 5590) shown as a banner.
+- `python -m bayn.preview record | export | gif`: records the dashboard's WebSocket stream for one loop, exports a
+  static copy of the dashboard that replays it (docs/preview/, opens from disk: the recording is a script, not a
+  fetch), and captures the README GIFs from that replay with headless Edge (DevTools protocol) + Pillow. No new
+  dependency.
+
+| Activity | Level | Acceptance criterion | Result |
+|---|---|---|---|
+| Timeline: scene/trigger times, seizure lead time, no two event windows share speech | Unit | as designed | ✅ |
+| Stitched WAV: length, silence and speech where planned | Unit | exact | ✅ |
+| Driver: each trigger once per loop, follows the audio, restarts with it, never fires a trigger it jumped past | Unit | as designed | ✅ |
+| Full showcase on the dev PC (GPU, Whisper large-v3-turbo, gemma4:e2b), 2 loops | System | 4 events per loop, each with transcript + summary | ✅ after D32/D33 (run 1: the seizure scene was lost) |
+| Seizure alarm during a gesture cooldown; gesture change keeps the seizure monitor | Integration / unit | alarm kept; same detector | ✅ (both fail without the fix) |
+| Recorded preview opened from disk (file://) in headless Edge | System | events, banner, transcript, summaries replay | ✅ |
+| On the demo laptop (CPU) | – | – | ⏳ |
+
+Finding (not a defect): the replayed CHB-MIT seizure EEG also set off the triple-blink rule on the forehead signal
+(rhythmic large waves look like blinks to a blink counter). The showcase switches the trigger to the button for that
+scene; the alarm itself is no longer lost (D32).
+
 ### Phase 7: Setup & packaging polish (planned)
 
 Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and the GPU all need native processes, so containers would add complexity without simplifying setup.
@@ -550,6 +577,7 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | Brainwave bands δ θ α β γ per sensor, Muse-app style (user request) | band unit tests, system test, live headset run | ✅ |
 | Guided onboarding / calibration (user request) | Phase 6 plan | ⏳ |
 | Gesture trigger: jaw clench / triple blink (double blink until 2026-11-10), configurable | detector unit tests, system test, demo run, user test | ✅ sim · ✅ clench and triple blink on the real headset (user demo tests 2026-11-10) |
+| Judges can preview without installing, and run a hardware-free tour | test_showcase.py, showcase system run, preview opened from disk | ✅ dev PC · ⏳ laptop |
 | Triple blink works on a fresh install, no training files to copy | test_blink_setup.py, `blink calibration` on real sessions | ✅ |
 | Per-user calibration | calibration unit + system tests, user test | ✅ sim · ✅ clench on real headset |
 | Cooldown against false triggers | `test_cooldown_suppresses_second_gesture`, false-trigger tests | ✅ |
@@ -597,6 +625,8 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | D27 | `bayn setup` on the clean demo laptop (2026-11-10) | Setup said "ready", but `models\ollama` didn't exist; the summary model was in `~\.ollama\models`. After a reboot (or with no tray app running) Bayn's own `ollama serve` would find no model | The Ollama installer launches its tray app; its server started before setup set `OLLAMA_MODELS`, and setup's pull went through that server into the default folder | Setup sets `OLLAMA_MODELS` / `OLLAMA_NO_CLOUD` before installing Ollama and stops the tray app the installer launched. Laptop: model moved into `models\ollama` (no re-download), checked through `local_server()` | manual (laptop) |
 | D28 | `benchmark report --out docs/BENCHMARK_LAPTOP.md` on the demo laptop (2026-11-10) | The laptop report said "results are from the dev PC", sections 2 and 3 were empty and section 5 found no combination, although 192 CPU summaries were measured; section 4's speed came from one arbitrary transcript source | The report used only `gpu`-profile LLM runs for quality (CPU profiles were speed-only on the dev PC) and kept the last cached file per (profile, model) | Quality comes from `gpu` runs when there are any, else from the CPU profile (`quality_profile`); CPU speed is over all sources (`cpu_speed`). Dev-PC output unchanged | `test_report_on_a_machine_without_gpu_uses_the_cpu_runs` |
 | D29 | Full suite on the demo laptop (2026-11-10) | 2 system tests failed (no clench event; calibration results without `clench`) | The test stack pins its config with env vars but not the gesture, so the laptop's config/local.yaml (`events.gesture: triple_blink`) leaked in | `running_stack` sets `BAYN_EVENTS__GESTURE=clench` → 210 passed, 3 skipped (headset ×2, real LLM) | `test_gesture_event_saved_and_downloadable`, `test_guided_calibration_with_simulator` |
+| D33 | Fixing D32 | Changing the gesture rebuilt every detector, including the seizure monitor, whose baseline needs ~40 s of signal: switching the trigger just before a seizure would delay or miss the alarm | `set_gesture` recreated all detectors | The seizure detector instance is kept across gesture changes | `test_changing_the_gesture_keeps_the_seizure_monitor_running` |
+| D32 | Showcase run 1 (System) | The seizure scene produced no seizure event ("seizure_model ignored (cooldown)") | The replayed clip first set off the triple-blink rule; the alarm 4 s later fell in that event's 15 s gesture cooldown | The cooldown applies to gestures only; seizure alarms have their own 120 s refractory period. Seizure events are labelled source "automatic" | `test_seizure_alarm_is_not_swallowed_by_a_gesture_cooldown` |
 | D31 | Laptop setup (user: "no need to manually move training"), checked with `blink calibration` on the real sessions | A fresh install on a real Muse caught 34 % of triple blinks with 2.6 false/min; Calibrate didn't help (31 %) | Without a trained model the blink signal was the AF7/AF8 average, which misses the Muse's blinks (they are on TP9/TP10, D25); Calibrate only set a threshold on that signal | Built-in Muse blink pattern; Calibrate learns the person's pattern from its three triple blinks → 66 % / 0.52 per min held-out | `test_real_headset_starts_on_the_builtin_pattern_simulator_on_the_forehead`, `test_calibrated_pattern_catches_blinks_the_forehead_signal_misses` |
 | D30 | Step 6 on the demo laptop (8 GB), live mic (2026-11-10) | Transcript lines 12-35 s behind speech; Whisper 8-34 s per utterance live vs 5 s offline on the same speech | Memory: ~1-2 GB available with gemma4:e2b loaded, browser and dev tools open, so Windows paged constantly (one 22 s stall at 12 MB available). Each light Bayn service also committed ~785 MB (numpy + scipy OpenBLAS per-thread buffers), system commit 22 / 24.9 GB | `bayn run` sets `OPENBLAS_NUM_THREADS=1` (~90 MB per service); opt-in `transcription.single_encode` (on for the laptop): 2.7-3.7 s per utterance after the model load; demo with only Bayn + a light browser open | `test_service_uses_the_engine_the_config_asks_for`, replay run (PROGRESS.md) |
 | D25 | Real headset sessions (user: "still not very accurate") | Rule 12/28 and ML 10/28 triple blinks caught | The blink signal was the AF7/AF8 average, but on the Muse blinks are largest on TP9/TP10 (forehead reference) and AF8 is noisy, so the average was close to the weakest view of the blinks | Blink signal learned per person from their labelled blinks; synthetic training data from their own blinks → ML 23/28, 0.81 false/min held-out | `test_learned_weights_find_the_persons_blink_pattern`, `test_trained_model_moves_the_rule_onto_the_learned_signal` |

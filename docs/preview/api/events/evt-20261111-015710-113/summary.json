@@ -1,0 +1,24 @@
+[
+  {
+    "event_id": "evt-20261111-015710-113",
+    "lang": "en",
+    "model": "gemma4:e2b",
+    "eeg": "**EEG (signal description, not a medical assessment):**\n- Dominant rhythm before → after: TP9 alpha → delta, AF7 delta → delta, AF8 delta → delta, TP10 alpha → delta\n- Signal quality after the event: TP9 good, AF7 good, AF8 good, TP10 good",
+    "llm_text": "**Summary:** Sarah stopped answering during a reading and was staring at the board without responding to her name. After about 40 seconds, she blinked, looked around, and said she feels tired and does not remember the last minute.\n**Key points:**\n- -6 s: Sarah stopped answering in the middle of the reading.\n- +13 s: She says she feels tired and does not remember the last minute.\n- +17 s: Ahmed is asked to call the school nurse.\n**Unclear:** none",
+    "error": null,
+    "prompt": [
+      {
+        "role": "system",
+        "content": "You write a short, factual summary of what a microphone recorded around an event that a person marked.\nRules:\n1. Use ONLY the transcript. Never add facts, names, numbers or interpretations that are not in it.\n2. Mention the concrete details: objects, places, what happened, what was explained, questions that were asked.\n3. The transcript comes from automatic speech recognition and contains errors. If a word or phrase does not make sense in context, do NOT report it as a fact; list it under \"Unclear\" instead.\n4. Leave out small talk that is unrelated to the main topic.\n5. This is not a medical assessment: no diagnosis, no medical advice, no guesses about anyone's health.\n6. Write in English only. At most 4 key points, each a full sentence with its time.\n\nAnswer ONLY with JSON in this shape (example, different topic):\n{\"summary\": \"A guide tells a group that the museum closes at five and explains why the old clock tower was rebuilt. The group is asked where the bus will wait.\",\n \"key_points\": [{\"time\": \"-3 s\", \"point\": \"The guide says the museum closes at five o'clock.\"},\n                {\"time\": \"+6 s\", \"point\": \"The clock tower was rebuilt after a fire.\"},\n                {\"time\": \"+14 s\", \"point\": \"The group is asked where the bus will wait.\"}],\n \"unclear\": [\"\\\"clock flour\\\" (probably \\\"clock tower\\\")\"]}\n\"summary\": 2-3 sentences that summarise (do not copy the transcript line by line). \"key_points\": at most 4. \"unclear\": [] if none."
+      },
+      {
+        "role": "user",
+        "content": "Transcript (times relative to the event):\n[-6 s] it's 10 20 sarah stopped answering in the middle of the reading\n[-2 s] she's staring at the board and she's not responding to her name\n[+1 s] her lips are moving like small chewing movements\n[+4 s] and her left hand is fidgeting with her pencil\n[+6 s] I'm timing it now. About 40 seconds have passed. She didn't fall. She's still sitting in her chair.\n[+13 s] Okay, she's blinking now and looking around. She says she feels tired and she doesn't remember\n[+17 s] the last minute. Ahmed, please go call the school nurse.\n\n(Event: manual trigger at 01:57:10.) Write the summary in English, as JSON."
+      }
+    ],
+    "markdown": "### Event: Manual trigger · 01:57:10\n\n**Summary:** Sarah stopped answering during a reading and was staring at the board without responding to her name. After about 40 seconds, she blinked, looked around, and said she feels tired and does not remember the last minute.\n**Key points:**\n- -6 s: Sarah stopped answering in the middle of the reading.\n- +13 s: She says she feels tired and does not remember the last minute.\n- +17 s: Ahmed is asked to call the school nurse.\n**Unclear:** none\n\n**EEG (signal description, not a medical assessment):**\n- Dominant rhythm before → after: TP9 alpha → delta, AF7 delta → delta, AF8 delta → delta, TP10 alpha → delta\n- Signal quality after the event: TP9 good, AF7 good, AF8 good, TP10 good\n\n_Generated locally by gemma4:e2b from an automatic transcript; it may contain errors. Prototype, not a medical device._",
+    "seconds": 1.37,
+    "tokens_per_s": 148,
+    "first_token_s": 0.48
+  }
+]

@@ -70,7 +70,10 @@ class EventManager:
 
     # ------------------------------------------------------------ configuration
     def set_gesture(self, gesture: str) -> None:
-        self.detectors = make_gesture_detectors(gesture, self.cfg, self.fs, self.channels)
+        # the seizure monitor keeps running across gesture changes (its baseline needs minutes of signal)
+        keep = {d.name: d for d in getattr(self, "detectors", []) if d.kind == "seizure"}
+        self.detectors = [keep.get(d.name, d) if d.kind == "seizure" else d
+                          for d in make_gesture_detectors(gesture, self.cfg, self.fs, self.channels)]
         self.gesture = gesture
         self.load_profile()
         log.info("trigger gesture: %s", gesture)
@@ -163,11 +166,14 @@ class EventManager:
         return out
 
     def _on_detection(self, det: Detection) -> Out:
-        if det.t - self.last_event_t < self.cfg.cooldown_s:
+        # the cooldown stops repeated GESTURES; an automatic seizure alarm is never swallowed by it
+        # (it has its own refractory period). Showcase run: the replayed seizure clip first set off the
+        # triple-blink rule, and the alarm 4 s later fell in that event's cooldown.
+        if det.kind != "seizure" and det.t - self.last_event_t < self.cfg.cooldown_s:
             self.suppressed += 1
             log.info("%s ignored (cooldown)", det.detector)
             return []
-        return self._create_event(det, source="gesture")
+        return self._create_event(det, source="automatic" if det.kind == "seizure" else "gesture")
 
     def _create_event(self, det: Detection, source: str) -> Out:
         self.last_event_t = det.t

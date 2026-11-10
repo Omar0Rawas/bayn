@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bayn Dashboard · recorded preview</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo-mark.png" alt="" width="44" height="44">
+      <div>
+        <h1>Bayn <span class="ar-name" lang="ar">بيّن</span></h1>
+        <p>Bridging the in-between. Keeping meaning clear.</p>
+      </div>
+    </div>
+    <div class="pills">
+      <span class="pill" id="pill-conn"><i class="dot"></i><span>Connecting…</span></span>
+      <span class="pill" id="pill-source">Source: –</span>
+      <span class="pill" id="pill-mains" title="Line-noise frequency measured in the signal">Mains: –</span>
+      <span class="pill warn" title="This software is a hackathon prototype">Prototype · not a medical device</span>
+    </div>
+  </header>
+
+  <!-- `bayn showcase`: the current scene (hidden otherwise) -->
+  <section class="showcase" id="showcase" hidden aria-live="polite">
+    <div class="sc-step" id="sc-step"></div>
+    <div class="sc-text"><strong id="sc-title"></strong><span id="sc-caption"></span></div>
+    <div class="sc-dots" id="sc-dots" aria-hidden="true"></div>
+  </section>
+
+  <main class="grid">
+    <!-- Live EEG -->
+    <section class="card eeg-card">
+      <div class="card-head">
+        <h2>Live EEG</h2>
+        <div class="controls">
+          <label>Scale
+            <select id="scale">
+              <option value="25">±25 µV</option>
+              <option value="50" selected>±50 µV</option>
+              <option value="100">±100 µV</option>
+              <option value="250">±250 µV</option>
+            </select>
+          </label>
+          <button class="btn ghost" id="btn-pause" type="button">Pause</button>
+        </div>
+      </div>
+      <div class="quality" id="quality"></div>
+      <div class="plot-wrap"><canvas id="eeg-plot"></canvas></div>
+      <p class="hint" id="filter-note">Filtered display</p>
+    </section>
+
+    <!-- Brainwave bands -->
+    <section class="card bands-card">
+      <div class="card-head">
+        <h2>Brainwaves</h2>
+        <span class="muted small-inline">share of total power, last 2 s</span>
+      </div>
+      <div class="bands" id="bands" aria-live="off"></div>
+      <p class="hint">Blinks show up as delta on AF7/AF8, jaw tension as beta/gamma on TP9/TP10. These are relaxation or focus cues only, not a medical measure.</p>
+    </section>
+
+    <!-- Trigger -->
+    <section class="card trigger-card">
+      <div class="card-head">
+        <h2>Event trigger</h2>
+        <span class="badge muted" id="trigger-state">–</span>
+      </div>
+      <label class="field">Gesture
+        <select id="gesture">
+          <option value="clench">Jaw clench (hold ~1 s)</option>
+          <option value="triple_blink">Triple blink</option>
+          <option value="both">Either gesture</option>
+          <option value="manual">Manual only (button / T)</option>
+        </select>
+      </label>
+      <div class="meters" id="meters"></div>
+      <div class="blink-row" id="blink-row" hidden>
+        <label class="field">Blink detector
+          <select id="blink-method" title="Auto uses your trained classifier if it beat the threshold rule on held-out data">
+            <option value="auto">Auto: rule on your blink pattern (ML only if clearly better)</option>
+            <option value="ml">ML classifier (forced)</option>
+            <option value="rule">Basic rule (untrained forehead average)</option>
+          </select>
+        </label>
+        <button class="btn ghost" id="btn-train" type="button">Train…</button>
+      </div>
+      <div class="seizure-row">
+        <label class="check" title="A demonstration of the seizure-detector socket">
+          <input type="checkbox" id="seizure-enabled"> Seizure detector <span class="badge muted">mock model</span>
+        </label>
+        <p class="muted small seizure-note">Trained on public CHB-MIT hospital EEG to show how a seizure model plugs in.
+          <b>Not validated on Muse data, not for clinical use.</b>
+          <a href="https://github.com/Omar0Rawas/bayn/blob/main/docs/SEIZURE_MODEL.md" target="_blank" rel="noopener">Model card</a></p>
+      </div>
+      <button class="btn primary big" id="btn-trigger" type="button"
+              title="Backup manual trigger (hotkey T)">Trigger event <kbd>T</kbd></button>
+      <div class="btn-row">
+        <button class="btn ghost" id="btn-calibrate" type="button">Calibrate…</button>
+        <button class="btn ghost" id="btn-sound" type="button" aria-pressed="false">🔇 Sound off</button>
+      </div>
+      <p class="hint" id="trigger-hint"></p>
+    </section>
+
+    <!-- Simulator -->
+    <section class="card sim-card" id="sim-card">
+      <div class="card-head"><h2>Simulator</h2><span class="badge muted" id="sim-state">–</span></div>
+      <p class="muted small">Inject fake gestures into the simulated headset.</p>
+      <div class="btn-row">
+        <button class="btn" data-inject="clench" type="button">Jaw clench</button>
+        <button class="btn" data-inject="triple_blink" type="button">Triple blink</button>
+        <button class="btn ghost" data-inject="double_blink" type="button">Double blink</button>
+        <button class="btn ghost" data-inject="blink" type="button">Single blink</button>
+      </div>
+      <p class="muted small">Artefacts that should <b>not</b> trigger:</p>
+      <div class="btn-row">
+        <button class="btn ghost" data-inject="nod" type="button">Nod</button>
+        <button class="btn ghost" data-inject="head_turn" type="button">Head turn</button>
+        <button class="btn ghost" data-inject="look_side" type="button">Look sideways</button>
+        <button class="btn ghost" data-inject="talk" type="button">Talk</button>
+      </div>
+      <p class="muted small">Seizure socket demo (switch on "Seizure detector" first):</p>
+      <div class="btn-row">
+        <button class="btn" data-inject="seizure" type="button"
+                title="Replays a real seizure from the public CHB-MIT database (patient not used for training)">Seizure (CHB-MIT clip)</button>
+      </div>
+      <ul class="log" id="inject-log"></ul>
+    </section>
+
+    <!-- Transcript -->
+    <section class="card transcript-card">
+      <div class="card-head">
+        <h2>Live transcript</h2>
+        <span class="badge muted" id="stt-model" title="Whisper model and device">loading…</span>
+      </div>
+      <div class="stt-bar">
+        <label class="field">Language
+          <select id="language">
+            <option value="mixed">Arabic + English (auto per sentence)</option>
+            <option value="en">English</option>
+            <option value="ar">العربية (Arabic)</option>
+            <option value="auto">Any language</option>
+          </select>
+        </label>
+        <div class="mic" title="Microphone level">
+          <span class="mic-dot" id="mic-dot"></span>
+          <div class="mic-track"><i id="mic-level"></i></div>
+          <small id="mic-name">mic…</small>
+        </div>
+      </div>
+      <ol class="transcript" id="transcript" aria-live="polite"></ol>
+      <p class="partial" id="partial" dir="auto"></p>
+      <div class="placeholder" id="transcript-empty">
+        <p>Speak and the transcript appears here, timestamped, in English, Arabic or both.</p>
+        <p dir="rtl" lang="ar" class="ar">تحدّث وسيظهر النص هنا مباشرةً.</p>
+      </div>
+    </section>
+
+    <!-- Timeline -->
+    <section class="card timeline-card">
+      <div class="card-head"><h2>Event timeline</h2><span class="badge muted" id="event-count">0</span></div>
+      <ol class="timeline" id="timeline"></ol>
+      <div class="placeholder" id="timeline-empty"><p>No events yet. Use your gesture, the button, or press <kbd>T</kbd>.</p></div>
+    </section>
+
+    <!-- Summaries -->
+    <section class="card summary-card">
+      <div class="card-head">
+        <h2>Summaries</h2>
+        <div class="controls">
+          <label>Summary language
+            <select id="sum-language">
+              <option value="auto">Same as speech</option>
+              <option value="en">English</option>
+              <option value="ar">العربية</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
+          <span class="badge muted" id="sum-model" title="Local LLM (Ollama)">LLM…</span>
+        </div>
+      </div>
+      <div id="summaries"></div>
+      <div class="placeholder" id="summaries-empty">
+        <p>When an event's window closes, its transcript is summarised here by a local LLM: what was heard &rarr; context &rarr; summary, written live.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- event flash banner -->
+  <div class="event-banner" id="event-banner" role="alert" aria-live="assertive"></div>
+
+  <!-- guided calibration -->
+  <div class="overlay" id="cal-overlay" hidden>
+    <div class="cal-box" role="dialog" aria-modal="true" aria-labelledby="cal-prompt">
+      <p class="muted small" id="cal-step">Calibration</p>
+      <p class="cal-prompt" id="cal-prompt">Starting…</p>
+      <div class="cal-count" id="cal-count"></div>
+      <div class="progress"><i id="cal-progress"></i></div>
+      <div class="cal-result" id="cal-result"></div>
+      <div class="btn-row cal-actions">
+        <button class="btn ghost" id="cal-cancel" type="button">Cancel</button>
+        <button class="btn primary" id="cal-close" type="button" hidden>Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- blink-detector training session -->
+  <div class="overlay" id="train-overlay" hidden>
+    <div class="cal-box train-box" role="dialog" aria-modal="true" aria-labelledby="train-prompt">
+      <p class="muted small" id="train-step">Train the triple-blink detector</p>
+      <div id="train-intro" class="train-intro">
+        <p>You'll be prompted to blink, nod, turn your head, look sideways and talk. Every prompt labels
+          the EEG, and a classifier learns to tell a deliberate triple blink from everything else, double blinks included.
+          Sessions are saved, so each new one makes the detector better.</p>
+        <div class="train-options">
+          <label class="field">You are
+            <select id="train-condition">
+              <option value="seated">Seated</option>
+              <option value="standing">Standing</option>
+              <option value="walking">Walking in place (prompts are spoken)</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="train-speak"> Speak the prompts</label>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" data-protocol="standard" type="button">Standard session · ~5 min</button>
+          <button class="btn" data-protocol="noisy" type="button">Noisy session · ~4.5 min</button>
+          <button class="btn" data-protocol="boundaries" type="button">Boundaries · ~6.5 min</button>
+        </div>
+        <p class="muted small">Standard: clean examples of each gesture. Noisy: triple blinks while talking,
+          looking around and moving, to test robustness. Boundaries: soft / fast / slow triple blinks and the closest look-alikes (four blinks, squeezing, nodding three times...), to teach the edges. Do a standard one first.</p>
+        <details class="train-sessions" id="train-sessions-box">
+          <summary>Saved sessions <span id="train-sessions-count"></span></summary>
+          <p class="muted small">Messed one up? Delete it and record it again, then Retrain.</p>
+          <ul class="log" id="train-sessions"></ul>
+        </details>
+        <button class="btn ghost small-btn" id="train-retrain" type="button">Retrain from saved sessions</button>
+      </div>
+      <p class="cal-prompt" id="train-prompt" hidden></p>
+      <div class="cal-count" id="train-count"></div>
+      <div class="progress" id="train-progress-bar" hidden><i id="train-progress"></i></div>
+      <div class="cal-result" id="train-result"></div>
+      <div class="btn-row cal-actions">
+        <button class="btn ghost" id="train-cancel" type="button" hidden>Cancel</button>
+        <button class="btn primary" id="train-close" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">Bayn <span id="version"></span> · runs 100% locally · prototype, not for clinical use</footer>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="session.js"></script>
+  <script src="replay.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

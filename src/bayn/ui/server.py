@@ -30,7 +30,7 @@ from bayn.common.config import AppConfig, load_config
 from bayn.common.log import setup_logging
 from bayn.common.schemas import (GESTURES, TOPIC_AUDIO_LEVEL, TOPIC_AUDIO_STATUS, TOPIC_CALIBRATION,
                                  TOPIC_EEG_BANDS, TOPIC_EEG_FILT, TOPIC_EEG_INJECTED, TOPIC_EEG_STATUS, TOPIC_EVENT,
-                                 TOPIC_EVENT_DONE, TOPIC_EVENTS_STATUS, TOPIC_SUMMARY, TOPIC_SUMMARY_STATUS,
+                                 TOPIC_EVENT_DONE, TOPIC_EVENTS_STATUS, TOPIC_SHOWCASE, TOPIC_SUMMARY, TOPIC_SUMMARY_STATUS,
                                  TOPIC_SUMMARY_TOKEN, TOPIC_TRAINING, TOPIC_TRANSCRIPT, TOPIC_TRANSCRIPT_PARTIAL,
                                  TOPIC_TRANSCRIPT_STATUS, TOPIC_TRANSCRIPT_WINDOW)
 from bayn.events.detectors import GESTURE_CHOICES
@@ -66,7 +66,8 @@ class Hub:
 
 
 def _eeg_to_json(m: dict) -> dict:
-    data = np.asarray(m["data"], dtype=np.float32)
+    # float64 before rounding: a rounded float32 still prints as -7.900000095367432 (4x the JSON)
+    data = np.asarray(m["data"], dtype=np.float64)
     return {"type": "eeg", "t0": m["t0"], "fs": m["fs"], "seq": m.get("seq", 0),
             "data": np.round(data, 1).tolist()}
 
@@ -209,6 +210,8 @@ def create_app(cfg: AppConfig | None = None, store: EventStore | None = None) ->
                  asyncio.create_task(_relay(b.sum_host, b.sum_pub_port,
                                             {TOPIC_SUMMARY_TOKEN: "summary_token", TOPIC_SUMMARY: "summary",
                                              TOPIC_SUMMARY_STATUS: "summary_status"}, hub, {TOPIC_SUMMARY_STATUS})),
+                 asyncio.create_task(_relay(b.showcase_host, b.showcase_pub_port, {TOPIC_SHOWCASE: "showcase"}, hub,
+                                            {TOPIC_SHOWCASE})),
                  asyncio.create_task(_heartbeat(hub))]
         for t in tasks:
             t.add_done_callback(_log_task_crash)

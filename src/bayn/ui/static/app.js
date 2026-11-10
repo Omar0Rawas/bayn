@@ -99,7 +99,7 @@ function draw() {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = cssVar("--ok");
-      ctx.fillText(m.label, x + 4, 14);
+      ctx.fillText(m.label, x + 4, 14 + 14 * (m.row || 0));
     }
   }
 }
@@ -148,7 +148,7 @@ function logInjection(m) {
   const li = document.createElement("li");
   li.innerHTML = `<span>${m.gesture.replace("_", " ")}</span><span>${m.ok ? fmtTime(m.t) : "not supported"}</span>`;
   $("inject-log").prepend(li);
-  if (m.ok) state.markers.push({ t: m.t, label: m.gesture.replace("_", " ") });
+  if (m.ok) state.markers.push({ t: m.t, label: "sim: " + m.gesture.replace("_", " "), row: 1 });   // below event labels
 }
 
 // ------------------------------------------------------------------ brainwave bands
@@ -381,7 +381,7 @@ function renderTraining(m) {
 
 // ------------------------------------------------------------------ events: banner + timeline
 const events = new Map();      // id -> meta
-const SOURCE_TEXT = { gesture: "", button: " (button)", hotkey: " (T key)" };
+const SOURCE_TEXT = { gesture: "", automatic: " (automatic)", button: " (button)", hotkey: " (T key)" };
 
 function showBanner(m) {
   const el = $("event-banner");
@@ -640,6 +640,17 @@ async function post(url, body) {
   } catch (e) { toast("Dashboard server not reachable"); }
 }
 
+// ------------------------------------------------------------------ `bayn showcase` scene banner
+function renderShowcase(m) {
+  const box = $("showcase");
+  box.hidden = false;
+  box.classList.toggle("seizure", m.trigger === "seizure");
+  $("sc-step").textContent = m.index ? `${m.index}/${m.total}` : "▶";
+  $("sc-title").textContent = m.title;
+  $("sc-caption").textContent = m.caption;
+  $("sc-dots").innerHTML = Array.from({ length: m.total }, (_, i) => `<i class="${i < m.index ? "on" : ""}"></i>`).join("");
+}
+
 // ------------------------------------------------------------------ websocket
 function connect(delay = 500) {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
@@ -683,6 +694,7 @@ function connect(delay = 500) {
       case "transcript_window": onTranscriptWindow(m); break;
       case "audio_level": renderAudioLevel(m); break;
       case "audio_status": renderAudioStatus(m); break;
+      case "showcase": renderShowcase(m); break;
       case "heartbeat":
         if (m.eeg_age_s !== null && m.eeg_age_s <= 2) setConn("live", "EEG live");
         else setConn("down", state.statusMsg ? capitalize(state.statusMsg)

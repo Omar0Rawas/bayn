@@ -453,3 +453,26 @@ on the dev PC; rename it to test the fresh-install path.)
 
 Next: 3) easy testing and demoing for judges; 4) repo and docs cleanup, GIFs, demo videos.
 
+## Showcase + recorded preview for judges (2026-11-11) ✅ (user confirmed 2026-11-11)
+User request: "streamline it so testing and demoing is easy for whoever downloads the repo (judges)" and "a way for
+judges to preview as much as possible"; GIFs before any videos. Speech: the user's wireless-mic corpus recordings
+(user: "those can be public"; the 4 used are in samples/showcase/, all 12 stay in data/recordings/wireless).
+- **`.\bayn showcase`** (also `make showcase`): no headset, no mic. 4 scenes in 212 s, looping: jaw clench + Arabic,
+  button + English, triple blink + mixed, mock seizure model + English lesson. Caption banner in the dashboard; the
+  trigger setting follows the scene. Script: samples/showcase/showcase.json; driver: src/bayn/showcase.py.
+- **Recorded preview**: `python -m bayn.preview record` (during a showcase, one loop) → `export` → docs/preview/
+  (3.8 MB; the real dashboard code replaying the recording; open index.html from disk or host it) → `gif` →
+  docs/media/*.gif (headless Edge + Pillow, reproducible; no triple-blink GIF: the user records one on the real
+  headset with a camera, docs/media/triple-blink.gif). README: new "Try it (judges)" section with the GIFs.
+- Fixes found by the showcase: D32 (seizure alarm swallowed by a gesture cooldown), D33 (gesture change reset the
+  seizure monitor). Also: EEG over the WebSocket was float32 noise digits (4x the JSON), now rounded properly;
+  simulator markers on the plot no longer overlap event labels.
+- Tests: tests/test_showcase.py (6) + 2 seizure regressions → 239 passed, 3 skipped (~3.5 min).
+
+**To test:** `.\bayn showcase` (watch one loop, ~4 min incl. the last summary); open docs/preview/index.html in a browser
+(no server); look at the README's GIFs. On the laptop (CPU) the summaries come later (~30 s), the scenes are spaced
+for that.
+
+Open: host the preview (GitHub Pages: Settings → Pages → main, /docs → https://omar0rawas.github.io/bayn/preview/)?
+Next: 4) repo and docs cleanup, demo videos.
+

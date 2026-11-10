@@ -1,0 +1,63 @@
+{
+  "event_id": "evt-20261111-015903-879",
+  "t_event": 1794351543.879174,
+  "t0": 1794351533.879174,
+  "t1": 1794351573.879174,
+  "segments": [
+    {
+      "id": "875e423b0ef0-1",
+      "utterance_id": "875e423b0ef0",
+      "t_start": 1794351529.9593792,
+      "t_end": 1794351534.6793792,
+      "text": "The leaves taking carbon dioxide from the air, and the roots taking water from the soil.",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 3.77
+    },
+    {
+      "id": "875e423b0ef0-2",
+      "utterance_id": "875e423b0ef0",
+      "t_start": 1794351534.6793792,
+      "t_end": 1794351538.9993792,
+      "text": "A green substance in the leaves called chlorophyll captures energy from sunlight.",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 3.77
+    },
+    {
+      "id": "dfd5f702ab8f-0",
+      "utterance_id": "dfd5f702ab8f",
+      "t_start": 1794351539.079379,
+      "t_end": 1794351544.119379,
+      "text": "Using that energy, the plant turns water and carbon dioxide into sugar and it releases oxygen.",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 1.2
+    },
+    {
+      "id": "dfd5f702ab8f-1",
+      "utterance_id": "dfd5f702ab8f",
+      "t_start": 1794351544.599379,
+      "t_end": 1794351547.4793792,
+      "text": "That oxygen is what we breathe. Quick question.",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 1.2
+    },
+    {
+      "id": "cabd88f69a0a-0",
+      "utterance_id": "cabd88f69a0a",
+      "t_start": 1794351547.911379,
+      "t_end": 1794351551.751379,
+      "text": "What do you think happens to a plant if we keep it in a dark cupboard for a week?",
+      "lang": "en",
+      "lang_prob": 1.0,
+      "latency_s": 1.21
+    }
+  ],
+  "text": "[-013.9 s] (en) The leaves taking carbon dioxide from the air, and the roots taking water from the soil.\n[-009.2 s] (en) A green substance in the leaves called chlorophyll captures energy from sunlight.\n[-004.8 s] (en) Using that energy, the plant turns water and carbon dioxide into sugar and it releases oxygen.\n[+000.7 s] (en) That oxygen is what we breathe. Quick question.\n[+004.0 s] (en) What do you think happens to a plant if we keep it in a dark cupboard for a week?",
+  "languages": [
+    "en"
+  ],
+  "n_segments": 5
+}

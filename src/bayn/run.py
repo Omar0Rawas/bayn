@@ -39,6 +39,8 @@ def _wait_http(url: str, timeout_s: float = 20.0) -> bool:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Run the Bayn pipeline")
     ap.add_argument("--demo", action="store_true", help="simulated EEG with scripted gestures")
+    ap.add_argument("--showcase", action="store_true",
+                    help="guided tour: simulated EEG + recorded speech, scripted scenes (no hardware)")
     ap.add_argument("--source", choices=["sim", "muse", "lsl"], help="EEG source (default from config)")
     ap.add_argument("--audio", choices=["mic", "file"], help="mic (default) or file (samples/audio/demo.wav)")
     ap.add_argument("--no-browser", action="store_true", help="do not open the dashboard")
@@ -54,6 +56,18 @@ def main(argv: list[str] | None = None) -> int:
         env["BAYN_SIMULATOR__AUTO_GESTURES__ENABLED"] = "true"
         env.setdefault("BAYN_EVENTS__GESTURE", "both")     # scripted gestures alternate clench / triple blink
         env.setdefault("BAYN_EVENTS__SEIZURE__ENABLED", "true")   # show the seizure socket (mock model)
+    if args.showcase:                                     # bayn.showcase: no headset, no microphone
+        from bayn.showcase import build
+
+        wav, tl = build()
+        env["BAYN_EEG__SOURCE"] = "sim"
+        env["BAYN_SIMULATOR__AUTO_GESTURES__ENABLED"] = "false"   # the scenes fire the triggers
+        env["BAYN_EVENTS__GESTURE"] = "both"
+        env["BAYN_EVENTS__SEIZURE__ENABLED"] = "true"
+        env["BAYN_AUDIO__SOURCE"] = "file"
+        env["BAYN_AUDIO__FILE"] = str(wav)
+        env["BAYN_AUDIO__LOOP"] = "true"
+        log.info("showcase: %d scenes, %.0f s, loops", len(tl.scenes), tl.length_s)
     if args.source:
         env["BAYN_EEG__SOURCE"] = args.source
     if args.audio:
@@ -73,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
         "transcriber": ([py, "-m", "bayn.transcription.service"], True),
         "summarizer": ([py, "-m", "bayn.summarization.service"], True),
     }
+    if args.showcase:
+        specs["showcase"] = ([py, "-m", "bayn.showcase"], True)
     if cfg.eeg.source == "lsl" and cfg.eeg.lsl.autostart_muselsl:
         cmd = [py, "-m", "muselsl", "stream"]
         bf = cfg.eeg.brainflow
@@ -87,7 +103,8 @@ def main(argv: list[str] | None = None) -> int:
         specs["ollama"] = (ollama_cmd, True)
         env.update(ollama_env())                               # local only + the user's model folder
         log.info("Ollama not running - starting it (models in %s)", env.get("OLLAMA_MODELS", "Ollama's default folder"))
-    log.info("EEG source: %s", cfg.eeg.source + (" (simulated, scripted gestures)" if args.demo else ""))
+    log.info("EEG source: %s", cfg.eeg.source + (" (simulated, scripted gestures)" if args.demo or args.showcase
+                                                 else ""))
 
     procs: dict[str, subprocess.Popen] = {}
     for name, (cmd, _) in specs.items():

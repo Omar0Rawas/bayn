@@ -30,6 +30,7 @@ TOPIC_TRANSCRIPT_WINDOW = "transcript.window"    # transcript attached to an eve
 TOPIC_SUMMARY_TOKEN = "summary.token"        # streamed piece of a summary being written
 TOPIC_SUMMARY = "summary.done"               # finished summary for an event
 TOPIC_SUMMARY_STATUS = "summary.status"      # Ollama reachable, model, last speed
+TOPIC_SHOWCASE = "showcase.scene"            # `bayn showcase`: the current scene's title + caption
 
 AUDIO_SR = 16000                             # Whisper's sample rate
 

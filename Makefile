@@ -3,11 +3,12 @@ PYTHON ?= python3
 VENV   := .venv
 PY     := $(VENV)/bin/python
 
-.PHONY: help setup demo run check models mics bridge ui test doctor clean
+.PHONY: help setup demo showcase run check models mics bridge ui test doctor clean
 
 help:
 	@echo "setup   create .venv, install pinned deps, run doctor"
 	@echo "demo    simulated EEG with scripted gestures + dashboard (no hardware)"
+	@echo "showcase guided tour: simulated EEG + recorded speech, 4 scripted scenes (no hardware)"
 	@echo "run     real Muse 2 (default) + dashboard (ARGS='--source lsl')"
 	@echo "check   connect to the headset 10 s, report signal quality (ARGS='--name Muse-XXXX')"
 	@echo "models  download Whisper models     mics  list microphones"
@@ -38,6 +39,9 @@ mics:
 
 demo:
 	$(PY) -m bayn.run --demo $(ARGS)
+
+showcase:
+	$(PY) -m bayn.run --showcase $(ARGS)
 
 run:
 	$(PY) -m bayn.run $(ARGS)

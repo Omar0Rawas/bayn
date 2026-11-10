@@ -81,6 +81,7 @@ switch ($Task) {
     & $Py -m bayn.doctor
   }
   "demo"   { Require-Venv; & $Py -m bayn.run --demo @Rest }
+  "showcase" { Require-Venv; & $Py -m bayn.run --showcase @Rest }
   "run"    { Require-Venv; & $Py -m bayn.run @Rest }
   "check"  { Require-Venv; & $Py -m bayn.eeg.check @Rest }
   "models" { Require-Venv; & $Py -m bayn.transcription.models @Rest; & $Py -m bayn.summarization.models @Rest }
@@ -106,6 +107,7 @@ switch ($Task) {
 Bayn tasks:
   setup    create .venv, install pinned deps (+ CUDA libs if NVIDIA GPU), download models, run doctor
   demo     simulated EEG + scripted gestures + live microphone + dashboard (no headset)
+  showcase guided tour, no hardware: simulated EEG + recorded speech, 4 scripted scenes
   run      real Muse 2 (default) + microphone + dashboard
            options: --source lsl|sim   --audio file (play samples/audio/demo.wav instead of the mic)
   check    connect to the headset for 10 s and report signal quality (check --name Muse-3EE1)

@@ -36,7 +36,7 @@ Check every change against the laptop, not just the dev PC:
 - Do NOT use `zmq.asyncio` in the FastAPI server: it fails on Windows' Proactor loop. Use `ThreadedSubscriber`.
 - EEG bridge publishes both `eeg.raw` (needed for clench/EMG detection at 55-100 Hz) and `eeg.filt` (1-40 Hz + notch).
 - Processes: eeg bridge (5555 pub / 5556 cmd), events service (5560 pub / 5561 cmd), audio (5570 pub),
-  transcriber (5575 pub / 5576 cmd), dashboard (8080). `bayn.run` starts all of them; audio + transcriber are
+  transcriber (5575 pub / 5576 cmd), showcase driver (5590 pub, only in `bayn showcase`), dashboard (8080). `bayn.run` starts all of them; audio + transcriber are
   restarted if they die and the transcriber has a degraded mode (no model → error status, rest keeps running).
 - Summarizer (5580 pub / 5581 cmd): Ollama at 127.0.0.1:11434 (installed on dev PC at
   %LOCALAPPDATA%\Programs\Ollama). Structured output (JSON schema) rendered by code; EEG section written by code,
@@ -73,6 +73,11 @@ Check every change against the laptop, not just the dev PC:
   trained on CHB-MIT (bayn.seizure: chbmit / features / train; assets/model.json + chbmit_clip.npz shipped; data in
   data/datasets, gitignored). Always say: NOT validated on Muse data, NOT for clinical use (docs/SEIZURE_MODEL.md).
   Off by default (`events.seizure.enabled`), on in `bayn demo`; simulator "seizure" replays the clip.
+- Showcase (2026-11-11): `bayn showcase` = sim EEG + samples/showcase/*.wav (user's wireless-mic corpus, public OK) +
+  driver bayn.showcase (5590 pub, topic showcase.scene → dashboard banner). Preview: `python -m bayn.preview record |
+  export | gif` → docs/preview (static replay, works from file://) + docs/media/*.gif (headless Edge, no new deps).
+  Re-record after UI changes. Seizure alarms bypass the gesture cooldown (D32); the seizure detector survives
+  gesture changes (D33).
 - Config: config/default.yaml <- config/local.yaml <- .env <- env vars `BAYN_SECTION__KEY` (src/bayn/common/config.py).
 
 ## Hardware notes

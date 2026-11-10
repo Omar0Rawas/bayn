@@ -19,6 +19,7 @@ config/local.yaml
 /models/
 *.wav
 !samples/audio/*.wav
+!samples/showcase/*.wav
 !tests/data/*.wav
 
 # Claude session exports contain full chat history - never commit

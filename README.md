@@ -12,10 +12,50 @@
 **A deliberate gesture on a Muse 2 headband starts a local pipeline: the event is tagged, the EEG around it is saved, live speech is transcribed with Whisper, and a small local LLM writes a short summary. Everything runs 100% offline.**
 
 > [!WARNING]
-> **Prototype for a hackathon demo. Not a medical device.** It does not detect seizures or any medical condition, and it must not be used for diagnosis, monitoring or treatment.
+> **Prototype for a hackathon demo. Not a medical device.** It must not be used for diagnosis, monitoring or treatment. The included seizure detector is a *mock* model trained on public hospital EEG to show how such a model would plug in; it is not validated on Muse data.
 
-![Dashboard screenshot](docs/img/dashboard.svg)
-<!-- TODO(Phase 7): replace with a real screenshot / GIF of the demo -->
+![The Bayn dashboard during the showcase: a jaw clench marks an event](docs/media/dashboard.gif)
+
+## Try it (judges)
+
+**1. Look first, nothing to install.** The GIFs below come from a recording of `bayn showcase`. The whole recorded
+dashboard replays in your browser: open [`docs/preview/index.html`](docs/preview/index.html) after cloning (or
+downloading the repo as a ZIP).
+
+**2. Run it yourself, no headset or microphone needed** (Windows; macOS/Linux: `make setup` / `make showcase`):
+```powershell
+git clone https://github.com/Omar0Rawas/bayn.git
+cd bayn
+.\bayn setup        # once: Python packages + Whisper + Ollama and a small local LLM (5-7 GB), then fully offline
+.\bayn showcase     # opens http://127.0.0.1:8080 and plays a 3.5-minute guided tour, on a loop
+```
+The showcase uses simulated EEG and recorded speech (a team member reading fictional scripts through the demo's
+wireless mic). Everything else is real and runs on your machine: the detectors, the saved EEG windows, live Whisper
+transcription and the local LLM summaries. Each scene fires one trigger:
+
+| Scene | Trigger | Speech | What to watch |
+|---|---|---|---|
+| 1 | **Jaw clench** | Arabic | the clench burst on the EEG, the event, then an Arabic summary |
+| 2 | **Button** (or the `T` key) | English | the same pipeline without a gesture |
+| 3 | **Triple blink** | Arabic with English terms | each sentence is transcribed in its own language |
+| 4 | **Seizure detector** (mock model) | English lesson | nobody triggers it: a replayed hospital EEG seizure (CHB-MIT) raises an automatic event |
+
+**3. Check the claims.** `.\bayn test` runs 239 tests without hardware (about 4 minutes); [docs/TESTING.md](docs/TESTING.md)
+has the test plan and results, [docs/BENCHMARK_LAPTOP.md](docs/BENCHMARK_LAPTOP.md) the measurements on the demo laptop,
+[docs/BLINK_DECISION.md](docs/BLINK_DECISION.md) why no ML is needed for blinks, and
+[docs/SEIZURE_MODEL.md](docs/SEIZURE_MODEL.md) the mock seizure model's card.
+
+**4. With a Muse 2 and a microphone:** `.\bayn run`, choose the trigger in **Event trigger**, press **Calibrate…** once
+(about a minute), then clench, blink three times or press `T` while someone talks.
+
+| Live transcript (Arabic) | Summary written locally |
+|---|---|
+| ![Live transcript](docs/media/transcript.gif) | ![Summary](docs/media/summary.gif) |
+
+| Seizure socket (mock model) |
+|---|
+| ![Seizure-like pattern flagged by the mock model](docs/media/seizure.gif) |
+<!-- Triple blink on a real headset: docs/media/triple-blink.gif (the team's own camera + screen recording, to come) -->
 
 ## Status
 
@@ -80,6 +120,7 @@ Requires **Python 3.12+**. No headset is needed for the demo. A microphone is op
 .\bayn check     # with the headset on: 10 s connection + signal-quality test
 .\bayn run       # real Muse 2 (default source) + mic + dashboard
 .\bayn demo --audio file    # no microphone: plays samples/audio/demo.wav (English + Arabic)
+.\bayn showcase  # guided tour, no headset and no microphone (see "Try it" above)
 ```
 Setup also installs **Ollama** (local LLM runtime, via winget on Windows) and downloads the models once: about **7 GB** with an NVIDIA GPU (Whisper large-v3-turbo + CUDA libraries + gemma4:e2b), about **5 GB** without one (Whisper small + gemma4:e2b; qwen3:4b below 7 GB RAM). After that everything runs offline.
 `bayn.cmd` works even though Windows blocks PowerShell scripts by default. It bypasses the policy for that one call only, and nothing on your system changes.
@@ -258,7 +299,7 @@ docs/            PROGRESS.md (phase log), TESTING.md (test plan + results), imag
 ## Testing
 
 ```powershell
-.\bayn test                                               # unit + integration + system, no hardware (~20 s)
+.\bayn test                                               # unit + integration + system, no hardware (~4 min)
 $env:BAYN_HARDWARE=1; .\.venv\Scripts\python.exe -m pytest -m hardware -v -s   # with the Muse on
 ```
 Tests are grouped into `unit`, `integration`, `system` and `hardware` markers. See [docs/TESTING.md](docs/TESTING.md) for the full test plan, per-phase results, the requirements traceability matrix and the defect log.

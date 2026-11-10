@@ -182,4 +182,39 @@ def test_manager_turns_the_alarm_into_a_seizure_event(tmp_path):
     assert len(events) == 1
     e = events[0]
     assert e["kind"] == "seizure" and e["detector"] == "seizure_model" and "mock" in e["label"]
+    assert e["source"] == "automatic"
     json.dumps(e)                                      # serialisable for the bus / store
+
+
+@needs_assets
+@pytest.mark.integration
+def test_seizure_alarm_is_not_swallowed_by_a_gesture_cooldown(tmp_path):
+    """Showcase run (D32): the replayed clip first set off the triple-blink rule; the seizure alarm 4 s later
+    fell in that event's 15 s cooldown and was dropped."""
+    cfg = EventsConfig(gesture="manual", seizure=SeizureConfig(enabled=True))
+    m = EventManager(cfg, FS, CHANNELS, store=None, source="sim", profiles_dir=tmp_path)
+    g = SimulatedEEG(CHANNELS, FS, seed=5)
+    injected = {}
+
+    def on_time(t_rel):
+        if t_rel >= 60 and not injected:
+            injected["t"] = g.inject("seizure", delay_s=0)
+
+    kinds = []
+    for raw, filt in sim_chunks(g, 140, on_time=on_time):
+        if injected:
+            m.last_event_t = raw.t0 - 2.0                 # a gesture event fired 2 s ago, all the time
+        kinds += [p["kind"] for t, p in m.on_chunk(raw, filt) if t == TOPIC_EVENT]
+    assert kinds == ["seizure"]
+
+
+@pytest.mark.unit
+def test_changing_the_gesture_keeps_the_seizure_monitor_running(tmp_path):
+    cfg = EventsConfig(gesture="clench", seizure=SeizureConfig(enabled=True))
+    m = EventManager(cfg, FS, CHANNELS, store=None, source="sim", profiles_dir=tmp_path)
+    before = [d for d in m.detectors if d.kind == "seizure"][0]
+    for g in ("triple_blink", "manual", "both"):
+        m.set_gesture(g)
+        assert [d for d in m.detectors if d.kind == "seizure"] == [before]
+    m.set_seizure(False)
+    assert not any(d.kind == "seizure" for d in m.detectors)
