@@ -95,9 +95,12 @@ class EventManager:
         self.set_gesture(self.gesture)
 
     def load_profile(self) -> dict | None:
-        for d in self.detectors:                       # trained blink classifier, if any
-            if hasattr(d, "load_model"):
-                d.load_model(self.model_path)
+        """Most personal first: a trained blink model, else (real headset) the built-in Muse blink pattern;
+        then the calibration profile, which may carry a blink pattern learned by Calibrate."""
+        for d in self.detectors:
+            trained = d.load_model(self.model_path) if hasattr(d, "load_model") else False
+            if not trained and self.source != "sim" and hasattr(d, "use_builtin_pattern"):
+                d.use_builtin_pattern()
         try:
             prof = json.loads(self.profile_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -325,7 +328,7 @@ class EventManager:
             "blink_method": self.cfg.triple_blink.method,
             "seizure_enabled": self.cfg.seizure.enabled,
             "training": self.training.message(now) if self.training else None,
-            "calibrated": all(getattr(d, "calibrated_threshold", None) is not None
-                              for d in self.detectors if d.calibratable) and bool(self.detectors),
+            "calibrated": all(d.status().get("calibrated") for d in self.detectors if d.calibratable)
+                          and any(d.calibratable for d in self.detectors),
             "t": now,
         }

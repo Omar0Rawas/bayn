@@ -434,3 +434,22 @@ trained on real public data with a disclaimer that it isn't validated on Muse da
 Next (user's list, 2026-11-10): 2) easier setup, with no manual copying of blink training; 3) easy testing and
 demoing for whoever downloads the repo (judges); 4) repo and docs cleanup, GIFs, demo videos.
 
+## Setup without blink training (2026-11-11) ✅ (user confirmed 2026-11-11)
+User request: "make the setup easier (no need to manually move training for blink detection)".
+- **Built-in Muse blink pattern** (src/bayn/events/assets/blink_muse.json: the 4 weights + threshold learned from the
+  user's 6 sessions; no recordings shipped). A real headset uses it until the person calibrates or trains.
+- **Calibrate… now learns the person's blink pattern** from its three triple blinks (about a minute), unless a
+  trained model is loaded; saved in data/profiles and reloaded. Dashboard hint says which pattern is in use
+  (trained / calibrated / built-in / forehead); the old "Train the ML detector" hint is gone (ML isn't needed).
+- **Measured on the real sessions, held out** (`.ayn blink calibration`): forehead signal 34 % caught, 2.6 false/min
+  (what a fresh install did before, D31); Calibrate learning the pattern **66 %, 0.52/min**; 26 min of training
+  67 %, 0.30/min. So training sessions are optional now; the laptop no longer needs data/training or data/models.
+- Tests: tests/test_blink_setup.py (6).
+
+**To test (headset):** delete or rename data/profiles/default-muse.json (or use a new profile), `.ayn run`, set the
+trigger to triple blink → the hint says "built-in Muse blink pattern" → try some triple blinks → **Calibrate…** →
+the hint says "your calibrated blink pattern" → triple blinks again. (The trained model in data/models still wins
+on the dev PC; rename it to test the fresh-install path.)
+
+Next: 3) easy testing and demoing for judges; 4) repo and docs cleanup, GIFs, demo videos.
+

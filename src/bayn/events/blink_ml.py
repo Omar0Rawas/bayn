@@ -43,7 +43,7 @@ from bayn.common.schemas import EEGChunk
 from bayn.eeg.buffer import RingBuffer
 from bayn.eeg.filters import StreamingFilter
 from bayn.events.detectors.base import CalibrationResult, Detection, Detector
-from bayn.events.detectors.blinks import BlinkCountDetector, front_ear_ratio
+from bayn.events.detectors.blinks import BlinkCountDetector, front_ear_ratio, weights_id
 from bayn.events.training import MOVEMENTS, NEAR_MISSES, Recording, list_recordings
 
 log = logging.getLogger("bayn.events")
@@ -97,10 +97,6 @@ def learn_weights(recordings: list[Recording]) -> np.ndarray:
     w = np.median(vecs, axis=0)
     w /= np.linalg.norm(w) or 1.0
     return w
-
-
-def weights_id(w: np.ndarray) -> str:
-    return "w:" + ",".join(f"{v:+.2f}" for v in w)
 
 
 def rule_threshold(recordings: list[Recording], w: np.ndarray, cfg: BlinkConfig) -> float | None:
@@ -720,6 +716,48 @@ def decision(report: dict) -> dict:
                        "signal, so the simpler rule is preferred.")}
 
 
+# ---------------------------------------------------------------- can a 1-minute Calibrate replace training?
+def calibration_segments(rec: Recording, reps: int = 3) -> tuple[np.ndarray, list[np.ndarray]]:
+    """What Calibrate would record in this session: ~13 s of quiet (the rest step, or "blink naturally" in a
+    noisy session) and the first `reps` triple-blink prompts (3 s each), each with 1 s of signal before it."""
+    quiet = next((s for s in rec.steps if s.kind == "rest"), None)         or next(s for s in rec.steps if s.label == "natural")
+
+    def seg(a: float, b: float) -> np.ndarray:
+        i0, i1 = np.searchsorted(rec.ts, [a, b])
+        return rec.data[:, i0:i1].astype(np.float64)
+
+    tb = [s for s in rec.steps if s.kind == "do" and s.label == TARGET][:reps]
+    return seg(quiet.start + 1, min(quiet.end, quiet.start + 15)), [seg(s.start - 1, s.start + 3) for s in tb]
+
+
+def calibration_check(recordings: list[Recording], cfg: BlinkConfig | None = None) -> dict:
+    """Held-out comparison on the person's real sessions (rule detector, prompt-level scoring as `decide`):
+    each session is scored by a setup that never saw it.
+      forehead     the AF7/AF8 signal with the default threshold (a fresh install before 2026-11-11)
+      forehead+cal the same after Calibrate (threshold only)
+      calibrated   Calibrate learning the blink pattern from 3 triple blinks of ANOTHER session (live code)
+      trained      learned from all OTHER sessions (what training produces)"""
+    cfg = cfg or BlinkConfig()
+    if len(recordings) < 2:
+        raise ValueError("needs at least 2 recorded sessions")
+    ch, fs = recordings[0].channels, recordings[0].fs
+    front = default_weights(ch)
+    rows: dict[str, list[dict]] = {k: [] for k in ("forehead", "forehead+cal", "calibrated", "trained")}
+    for j, test in enumerate(recordings):
+        others = [r for k, r in enumerate(recordings) if k != j]
+        rows["forehead"].append(window_metrics(test, rule_detections(test, cfg, None, front)))
+        w = learn_weights(others)
+        rows["trained"].append(window_metrics(test, rule_detections(test, cfg, rule_threshold(others, w, cfg), w)))
+        for cal in others:
+            rest, gestures = calibration_segments(cal)
+            d = BlinkCountDetector(fs, ch, cfg)
+            thr = d._measure(d.weights, rest, gestures).threshold
+            rows["forehead+cal"].append(window_metrics(test, rule_detections(test, cfg, thr, front)))
+            d.calibrate(rest, gestures)
+            rows["calibrated"].append(window_metrics(test, rule_detections(test, cfg, d.threshold, d.weights)))
+    return {k: {**_sum_metrics(v), "runs": len(v)} for k, v in rows.items()}
+
+
 def model_path(profile: str, source: str) -> Path:
     return MODELS_DIR / f"blink-{profile}-{source}.joblib"
 
@@ -833,6 +871,14 @@ class MLBlinkDetector(Detector):
         except Exception as e:  # corrupted / incompatible pickle
             log.warning("could not load blink model %s: %s", path, e)
             return False
+
+    def use_builtin_pattern(self) -> bool:
+        """No trained model on a real headset: the rule runs on the shipped Muse blink pattern."""
+        if not self.rule.use_builtin_pattern():
+            return False
+        self.weights = self.rule.weights
+        self.reset()
+        return True
 
     @property
     def ml_active(self) -> bool:
@@ -1000,14 +1046,27 @@ def render_decision(r: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["train", "inspect", "decide"],
+    ap.add_argument("cmd", choices=["train", "inspect", "decide", "calibration"],
                     help="train: evaluate + save the model | inspect: evaluate only | "
-                         "decide: train + write docs/BLINK_DECISION.md (is ML necessary?)")
+                         "decide: train + write docs/BLINK_DECISION.md (is ML necessary?) | "
+                         "calibration: can a 1-minute Calibrate replace training? (held out)")
     ap.add_argument("--profile")
     ap.add_argument("--source", default=None, help="muse | lsl | sim (default: eeg.source)")
     args = ap.parse_args(argv)
     cfg = load_config()
     profile, source = args.profile or cfg.events.profile, args.source or cfg.eeg.source
+    if args.cmd == "calibration":
+        recs = [Recording.load(p) for p in list_recordings(profile, source)]
+        try:
+            res = calibration_check(recs, cfg.events.triple_blink)
+        except ValueError as e:
+            print(e)
+            return 1
+        print(f"{len(recs)} sessions of {profile}-{source}, each scored by a setup that never saw it:")
+        for k, m in res.items():
+            print(f"  {k:13s} caught {m['caught']:4d}/{m['prompts']:<4d} ({m['recall']:.1%})  "
+                  f"false {m['false_per_min']:.2f}/min  ({m['runs']} runs)")
+        return 0
     try:
         r = train_from_sessions(profile, source, cfg.events.triple_blink, save=args.cmd != "inspect")
     except ValueError as e:

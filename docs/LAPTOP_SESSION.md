@@ -13,7 +13,8 @@ This brief is for the Claude Code session on the **demo laptop**. The user paste
 4. Optional, saves a lot of downloading: from the dev PC, copy onto a USB drive:
    - `models/whisper/`: at least `small` and `large-v3-turbo`, plus `tiny` for the tests;
    - `models/ollama/`: `gemma4:e2b` and `qwen3:4b`;
-   - `data/training/` and `data/models/`: the user's labelled blink sessions and blink model.
+   - (no longer needed since 2026-11-11: triple blink uses a built-in Muse pattern, and Calibrate… learns the
+     person's own in about a minute. `data/training/` + `data/models/` only if you want the 31-min trained model.)
 
    Copy each folder to the same place inside the cloned repo.
 5. Have the wireless microphone, the Muse 2 headset (charged) and the laptop charger at hand.

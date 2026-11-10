@@ -469,6 +469,39 @@ public data, with a clear disclaimer that it isn't validated on Muse data.
 | Dashboard switch on/off, status shows the detector with its disclaimer | System | as designed | ✅ |
 | On a real Muse | – | – | **not done, and not claimed** |
 
+### Setup without blink training (2026-11-11) ✅ software, real recorded sessions · ✅ user test
+
+**Goal** (user): "make the setup easier (no need to manually move training for blink detection)". On the laptop,
+triple blink only worked after copying 6 sessions + the blink model from the dev PC (PROGRESS, "Demo laptop
+session"). Without them a real Muse fell back to the forehead (AF7/AF8) signal: D31.
+- **Built-in Muse blink pattern** (src/bayn/events/assets/blink_muse.json: 4 weights + a threshold, no recordings),
+  used on a real headset with the Muse sensors when no trained model exists.
+- **Calibrate… learns the person's blink pattern** from its three triple blinks (same method as training:
+  first principal component per blink, median), unless a trained model is loaded. Saved in the profile, reloaded.
+- **Check on the user's 6 real sessions** (`.ayn blink calibration`, live calibration code; every session
+  scored by a setup that never saw it; calibration taken from each other session in turn):
+
+| Blink setup | Caught | False triggers / min |
+|---|---|---|
+| Forehead signal, default threshold (fresh install before) | 33/96 (34 %) | 2.62 |
+| Forehead signal + Calibrate (threshold only, before) | 151/480 (31 %) | 2.78 |
+| **Calibrate learning the pattern (3 triple blinks, about 1 min)** | **318/480 (66 %)** | **0.52** |
+| Trained on the 5 other sessions (~26 min) | 64/96 (67 %) | 0.30 |
+
+  Keeping whichever signal separated better instead of always the learned one: 65.4 % / 0.52, so the learned
+  pattern is always kept unless it can't tell blinks from rest. The built-in pattern comes from this same
+  person, so it is not scored on them (it would be optimistic); for anyone else, Calibrate is the answer.
+
+| Activity | Level | Acceptance criterion | Result |
+|---|---|---|---|
+| Built-in pattern shipped, follows the channel order, None for other headsets | Unit | as designed | ✅ |
+| Real headset starts on the built-in pattern (not counted as calibrated); simulator stays on the forehead | Unit | as designed | ✅ |
+| Calibrate learns the ear-sensor pattern of a simulated Muse-like person, survives a restart | Integration | weights on TP9/TP10, same threshold after reload | ✅ |
+| That calibrated pattern catches more triple blinks than the forehead signal, no false events | Integration | ≥ 5/6, more than forehead, 0 false | ✅ |
+| A trained model keeps its pattern through Calibrate (threshold only) | Integration | as designed | ✅ |
+| Calibrate replacing training on real sessions | Offline evaluation | report | **66 % / 0.52 per min vs 67 % / 0.30 trained** (above) |
+| On the headset, fresh profile: Calibrate, then triple blinks | User test | works | ✅ (2026-11-11: "all good") |
+
 ### Phase 7: Setup & packaging polish (planned)
 
 Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and the GPU all need native processes, so containers would add complexity without simplifying setup.
@@ -516,7 +549,8 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | Signal-quality display | quality unit tests, system test, hardware `check` | ✅ |
 | Brainwave bands δ θ α β γ per sensor, Muse-app style (user request) | band unit tests, system test, live headset run | ✅ |
 | Guided onboarding / calibration (user request) | Phase 6 plan | ⏳ |
-| Gesture trigger: jaw clench / triple blink (double blink until 2026-11-10), configurable | detector unit tests, system test, demo run, user test | ✅ sim · ✅ clench on real headset · ⏳ triple blink on real headset (F1 → Phase 6 ML, sessions pending) |
+| Gesture trigger: jaw clench / triple blink (double blink until 2026-11-10), configurable | detector unit tests, system test, demo run, user test | ✅ sim · ✅ clench and triple blink on the real headset (user demo tests 2026-11-10) |
+| Triple blink works on a fresh install, no training files to copy | test_blink_setup.py, `blink calibration` on real sessions | ✅ |
 | Per-user calibration | calibration unit + system tests, user test | ✅ sim · ✅ clench on real headset |
 | Cooldown against false triggers | `test_cooldown_suppresses_second_gesture`, false-trigger tests | ✅ |
 | Visual + audio feedback | manual (banner, plot marker, Web Audio beep) | ⏳ user |
@@ -563,6 +597,7 @@ Docker was dropped (2026-11-09): the EEG bridge (Bluetooth), the microphone and 
 | D27 | `bayn setup` on the clean demo laptop (2026-11-10) | Setup said "ready", but `models\ollama` didn't exist; the summary model was in `~\.ollama\models`. After a reboot (or with no tray app running) Bayn's own `ollama serve` would find no model | The Ollama installer launches its tray app; its server started before setup set `OLLAMA_MODELS`, and setup's pull went through that server into the default folder | Setup sets `OLLAMA_MODELS` / `OLLAMA_NO_CLOUD` before installing Ollama and stops the tray app the installer launched. Laptop: model moved into `models\ollama` (no re-download), checked through `local_server()` | manual (laptop) |
 | D28 | `benchmark report --out docs/BENCHMARK_LAPTOP.md` on the demo laptop (2026-11-10) | The laptop report said "results are from the dev PC", sections 2 and 3 were empty and section 5 found no combination, although 192 CPU summaries were measured; section 4's speed came from one arbitrary transcript source | The report used only `gpu`-profile LLM runs for quality (CPU profiles were speed-only on the dev PC) and kept the last cached file per (profile, model) | Quality comes from `gpu` runs when there are any, else from the CPU profile (`quality_profile`); CPU speed is over all sources (`cpu_speed`). Dev-PC output unchanged | `test_report_on_a_machine_without_gpu_uses_the_cpu_runs` |
 | D29 | Full suite on the demo laptop (2026-11-10) | 2 system tests failed (no clench event; calibration results without `clench`) | The test stack pins its config with env vars but not the gesture, so the laptop's config/local.yaml (`events.gesture: triple_blink`) leaked in | `running_stack` sets `BAYN_EVENTS__GESTURE=clench` → 210 passed, 3 skipped (headset ×2, real LLM) | `test_gesture_event_saved_and_downloadable`, `test_guided_calibration_with_simulator` |
+| D31 | Laptop setup (user: "no need to manually move training"), checked with `blink calibration` on the real sessions | A fresh install on a real Muse caught 34 % of triple blinks with 2.6 false/min; Calibrate didn't help (31 %) | Without a trained model the blink signal was the AF7/AF8 average, which misses the Muse's blinks (they are on TP9/TP10, D25); Calibrate only set a threshold on that signal | Built-in Muse blink pattern; Calibrate learns the person's pattern from its three triple blinks → 66 % / 0.52 per min held-out | `test_real_headset_starts_on_the_builtin_pattern_simulator_on_the_forehead`, `test_calibrated_pattern_catches_blinks_the_forehead_signal_misses` |
 | D30 | Step 6 on the demo laptop (8 GB), live mic (2026-11-10) | Transcript lines 12-35 s behind speech; Whisper 8-34 s per utterance live vs 5 s offline on the same speech | Memory: ~1-2 GB available with gemma4:e2b loaded, browser and dev tools open, so Windows paged constantly (one 22 s stall at 12 MB available). Each light Bayn service also committed ~785 MB (numpy + scipy OpenBLAS per-thread buffers), system commit 22 / 24.9 GB | `bayn run` sets `OPENBLAS_NUM_THREADS=1` (~90 MB per service); opt-in `transcription.single_encode` (on for the laptop): 2.7-3.7 s per utterance after the model load; demo with only Bayn + a light browser open | `test_service_uses_the_engine_the_config_asks_for`, replay run (PROGRESS.md) |
 | D25 | Real headset sessions (user: "still not very accurate") | Rule 12/28 and ML 10/28 triple blinks caught | The blink signal was the AF7/AF8 average, but on the Muse blinks are largest on TP9/TP10 (forehead reference) and AF8 is noisy, so the average was close to the weakest view of the blinks | Blink signal learned per person from their labelled blinks; synthetic training data from their own blinks → ML 23/28, 0.81 false/min held-out | `test_learned_weights_find_the_persons_blink_pattern`, `test_trained_model_moves_the_rule_onto_the_learned_signal` |
 | D24 | Switching the trigger to three blinks (simulator) | The rule missed 4–5 of 30 triple blinks | Each blink's 0.3 Hz high-pass rebound pulls the baseline down; the third blink of a fast series rose 170 µV but only reached +87 µV, under the 90 µV threshold. Two blinks overlapping without returning to baseline also merged | Inside a series, a blink counts by its rise from the dip before it (and must cross zero); a peak also ends on a 40 % dip; stray weaker blinks (< 45 % of the largest) aren't counted → 29/30 | `test_triple_blink_detection_rate`, `test_single_and_double_blinks_do_not_fire` |

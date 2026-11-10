@@ -1,0 +1,8 @@
+{
+  "what": "Built-in Muse blink pattern: the blink signal (weights . channels) and the rule threshold for triple-blink detection on a Muse headset, used until the person calibrates (Calibrate... learns their own pattern in about a minute).",
+  "from": "6 labelled sessions (31 min, standard / noisy / boundaries, seated and standing) of one person on a Muse 2, 2026-11-10. Only these numbers are shipped, no recordings.",
+  "why": "On a Muse the reference sits on the forehead (Fpz), so blinks show up largest on TP9/TP10, not on AF7/AF8 (docs/TESTING.md D25).",
+  "channels": ["TP9", "AF7", "AF8", "TP10"],
+  "weights": [-0.681, 0.032, -0.136, -0.719],
+  "rule_threshold": 341.2
+}

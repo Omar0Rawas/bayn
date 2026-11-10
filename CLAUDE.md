@@ -64,8 +64,11 @@ Check every change against the laptop, not just the dev PC:
   fire). Phase 6: EEG ONLY (no accelerometer: the end device won't have one). `events/training.py` =
   labelled recording sessions (standard / noisy) → data/training/<profile>-<source>/*.npz; `events/blink_ml.py` =
   candidate finder → 27 features (incl. TP9/TP10 vs forehead) → random forest → data/models/blink-<profile>-<source>
-  .joblib → `MLDoubleBlinkDetector` (rule fallback; `double_blink.method` auto = ML only if it beat the rule held-out). Finder + features must stay identical
+  .joblib → `MLBlinkDetector` (rule fallback; `triple_blink.method` auto = ML only if it beat the rule held-out; it did not: docs/BLINK_DECISION.md). Finder + features must stay identical
   offline and live (test). Real Muse forehead noise is 22-87 µV (sim ~10): check changes on real windows too.
+- Blink pattern (2026-11-11), most personal first: trained model > Calibrate-learned (profile `weights`) > built-in
+  Muse pattern (events/assets/blink_muse.json, real headsets only) > AF7/AF8 "front" (simulator). `.ayn blink
+  calibration` = held-out check on real sessions (Calibrate 66 %/0.52 vs trained 67 %/0.30 per min).
 - Seizure socket (2026-11-10): `SeizureModelDetector` (events/detectors/seizure_model.py) = MOCK logistic model
   trained on CHB-MIT (bayn.seizure: chbmit / features / train; assets/model.json + chbmit_clip.npz shipped; data in
   data/datasets, gitignored). Always say: NOT validated on Muse data, NOT for clinical use (docs/SEIZURE_MODEL.md).

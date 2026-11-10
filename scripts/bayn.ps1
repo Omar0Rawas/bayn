@@ -119,7 +119,8 @@ Bayn tasks:
            benchmark stt --models small large-v3-turbo | benchmark llm --models qwen2.5:3b --sources all
            benchmark report
   blink    blink detector: blink decide (default) = is ML necessary? -> docs/BLINK_DECISION.md
-           blink train | blink inspect (headset sessions in data/training/)
+           blink train | blink inspect | blink calibration (headset sessions in data/training/;
+           not needed to use triple blink: built-in Muse pattern + Calibrate)
   bridge   EEG bridge only           ui   dashboard only
   test     run the test suite        doctor  check this machine
   clean    remove caches

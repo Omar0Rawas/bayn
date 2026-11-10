@@ -33,12 +33,17 @@ class CalibrationResult:
     quality: str               # good | weak | failed
     message: str = ""
     space: str = ""            # signal the threshold applies to (blink detector: which channel weights)
+    weights: dict | None = None    # blink detector: the blink pattern Calibrate learned ({channel: weight})
 
     def to_dict(self) -> dict:
         d = {"threshold": self.threshold, "rest_level": self.rest_level,
              "gesture_level": self.gesture_level, "separation": self.separation,
              "quality": self.quality, "message": self.message}
-        return {**d, "space": self.space} if self.space else d
+        if self.space:
+            d["space"] = self.space
+        if self.weights:
+            d["weights"] = self.weights
+        return d
 
 
 class Detector(ABC):

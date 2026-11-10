@@ -264,11 +264,15 @@ function renderTriggerStatus(s) {
   if (blink) {
     const sel = $("blink-method");
     if (document.activeElement !== sel && s.blink_method && sel.value !== s.blink_method) sel.value = s.blink_method;
+    const pattern = {
+      trained: "your trained blink pattern",
+      calibrated: "your calibrated blink pattern",
+      "built-in": "the built-in Muse blink pattern. Calibrate (about 1 min) to learn yours",
+      front: "the forehead signal. Calibrate (about 1 min) to learn your blink pattern",
+    }[blink.pattern] || "threshold rule";
     hint += blink.method === "ml"
       ? ` Triple blink: ML classifier${blink.last_p != null ? ` (last P = ${blink.last_p})` : ""}.`
-      : blink.wanted === "rule" ? ""
-      : blink.model ? " Triple blink: threshold rule (the trained model hasn't beaten it yet; record another session)."
-      : " Triple blink: threshold rule. Train the ML detector for fewer false triggers.";
+      : ` Triple blink: ${pattern}.`;
   }
   if (s.training && $("train-overlay").hidden) renderTraining(s.training);     // page reloaded mid-session
   const sz = $("seizure-enabled");
