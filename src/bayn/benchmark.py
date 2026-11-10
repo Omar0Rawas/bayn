@@ -594,7 +594,9 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--models", nargs="+", required=True)
     c.add_argument("--profiles", nargs="+", default=["gpu", "laptop"], choices=list(PROFILES))
     c.add_argument("--force", action="store_true")
-    sub.add_parser("report", help=f"write {REPORT.relative_to(ROOT)}")
+    r = sub.add_parser("report", help=f"write {REPORT.relative_to(ROOT)} (or --out)")
+    r.add_argument("--out", type=Path, default=REPORT,
+                   help="report file, e.g. docs/BENCHMARK_LAPTOP.md on the demo laptop (keeps the dev-PC report)")
     w = sub.add_parser("_stt")                    # internal: one Whisper model in a fresh process
     w.add_argument("model")
     w.add_argument("profile")
@@ -607,8 +609,8 @@ def main(argv: list[str] | None = None) -> int:
         return stt_worker(args.model, args.profile)
     if args.cmd == "mem":
         return run_mem(args)
-    REPORT.write_text(render_report(), encoding="utf-8")
-    print(f"wrote {REPORT}")
+    args.out.write_text(render_report(), encoding="utf-8")
+    print(f"wrote {args.out}")
     return 0
 
 
