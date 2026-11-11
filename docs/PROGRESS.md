@@ -496,3 +496,6 @@ libraries and models explicitly; then a scan and a self-rating.
 - Real-headset GIFs (user, 2026-11-11): triple blink + jaw clench with a webcam inset, recorded live; web versions
   docs/media/triple-blink.gif (5.3 MB) and jaw-clench.gif (4.2 MB), 960 px, full frame rate; originals (36 MB) kept
   locally in data/media-originals (gitignored).
+- Demo video (user, 2026-11-11): https://www.youtube.com/watch?v=TB1V3P3CKks, embedded at the top of the README
+  (thumbnail docs/media/video-thumbnail.jpg). README About corrected: the summary is mainly a catch-up note for the
+  child (user), not a report for parents/doctors.

@@ -14,18 +14,20 @@
 > [!WARNING]
 > **Prototype for a hackathon demo. Not a medical device.** It must not be used for diagnosis, monitoring or treatment. The included seizure detector is a *mock* model trained on public hospital EEG to show how such a model would plug in; it is not validated on Muse data.
 
-![The Bayn dashboard during the showcase: a jaw clench marks an event](docs/media/dashboard.gif)
+[![Watch the live demo on YouTube: Muse 2, three blinks, jaw clench, button, Arabic and English lessons](docs/media/video-thumbnail.jpg)](https://www.youtube.com/watch?v=TB1V3P3CKks)
 
 ## About
 
 **The problem.** *Absence seizures* are brief lapses of awareness, often only a few seconds of staring, that are
-common in school-age children and easy to miss or mistake for daydreaming. The adults around the child, a teacher or a
-parent, are often the only witnesses, and what they noticed is hard to recall accurately later.
+common in school-age children and easy to miss or mistake for daydreaming. They can happen many times a day, and
+during each one the child takes nothing in: in class, every seizure leaves a small gap in the lesson, and the gaps add up.
 
-**The idea.** A comfortable EEG headband detects such an episode, and Bayn captures the moment: the EEG from 10 s
-before to 30 s after, a live transcript of what the people nearby said (in Arabic, English, or a mix of both), and a
-short structured summary they can pass on to a parent or doctor. Everything runs offline on a laptop, so no recording
-leaves the room.
+**The idea.** An EEG headband detects the seizure, and Bayn captures what the teacher was saying around it (in
+Arabic, English, or a mix of both), transcribes it, and writes a **short catch-up summary for the child**, so they can
+see what they missed. The EEG from 10 s before to 30 s after is saved with it as a record of the moment. Everything
+runs offline on a laptop, so nothing leaves the classroom.
+
+![The Bayn dashboard during the showcase: a jaw clench marks an event](docs/media/dashboard.gif)
 
 **What this prototype does today.** Automatic detection of absence seizures on a consumer headband is not something a
 hackathon can build or validate. So, **for development and testing, events are triggered deliberately**:
