@@ -82,7 +82,16 @@ has the test results, the measurements on the demo laptop and the model cards.
 | Seizure socket (mock model) |
 |---|
 | ![Seizure-like pattern flagged by the mock model](docs/media/seizure.gif) |
-<!-- Triple blink on a real headset: docs/media/triple-blink.gif (the team's own camera + screen recording, to come) -->
+
+**On a real Muse 2** (the dashboard with a webcam in the corner, recorded live):
+
+*Triple blink:* three firm blinks show up as three large waves on the ear sensors (TP9/TP10), and the event fires.
+
+![Triple blink on a real Muse 2: three waves on TP9/TP10 and an event](docs/media/triple-blink.gif)
+
+*Jaw clench:* clenching for about a second makes a burst of fast muscle activity, clearest on the ear sensors (TP9/TP10), and the event fires.
+
+![Jaw clench on a real Muse 2: a burst of muscle activity and an event](docs/media/jaw-clench.gif)
 
 ## How it works
 

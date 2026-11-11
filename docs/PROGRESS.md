@@ -493,3 +493,6 @@ libraries and models explicitly; then a scan and a self-rating.
 - Fixed: D34 (backspace characters in 4 docs), D35 (`httpx` missing from the runtime dependencies); stale texts (training
   dialog said a classifier learns; training.py said double blink).
 
+- Real-headset GIFs (user, 2026-11-11): triple blink + jaw clench with a webcam inset, recorded live; web versions
+  docs/media/triple-blink.gif (5.3 MB) and jaw-clench.gif (4.2 MB), 960 px, full frame rate; originals (36 MB) kept
+  locally in data/media-originals (gitignored).
