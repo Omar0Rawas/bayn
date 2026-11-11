@@ -8,7 +8,6 @@ from bayn.events.detectors.clench import ClenchDetector
 from bayn.events.detectors.blinks import BlinkCountDetector
 from bayn.events.detectors.manual import ManualDetector
 from bayn.events.detectors.seizure_model import SeizureModelDetector
-from bayn.events.detectors.seizure_stub import SeizureDetectorStub
 
 GESTURE_CHOICES = ("clench", "triple_blink", "both", "manual")
 
@@ -33,5 +32,5 @@ def make_gesture_detectors(gesture: str, cfg: EventsConfig, fs: float, channels:
 
 
 __all__ = ["CalibrationResult", "ClenchDetector", "Detection", "Detector", "BlinkCountDetector",
-           "GESTURE_CHOICES", "ManualDetector", "SeizureDetectorStub", "SeizureModelDetector",
+           "GESTURE_CHOICES", "ManualDetector", "SeizureModelDetector",
            "make_gesture_detectors"]

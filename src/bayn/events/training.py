@@ -1,4 +1,4 @@
-"""Guided, labelled recording sessions for training the double-blink classifier (Phase 6).
+"""Guided, labelled recording sessions for training and checking the triple-blink detector (Phase 6).
 
 A session is a timeline of prompts driven by EEG data time (like calibration). Every prompt labels
 its time window, so the recording can be cut into labelled examples afterwards:

@@ -441,12 +441,12 @@ User request: "make the setup easier (no need to manually move training for blin
 - **Calibrate… now learns the person's blink pattern** from its three triple blinks (about a minute), unless a
   trained model is loaded; saved in data/profiles and reloaded. Dashboard hint says which pattern is in use
   (trained / calibrated / built-in / forehead); the old "Train the ML detector" hint is gone (ML isn't needed).
-- **Measured on the real sessions, held out** (`.ayn blink calibration`): forehead signal 34 % caught, 2.6 false/min
+- **Measured on the real sessions, held out** (`.\bayn blink calibration`): forehead signal 34 % caught, 2.6 false/min
   (what a fresh install did before, D31); Calibrate learning the pattern **66 %, 0.52/min**; 26 min of training
   67 %, 0.30/min. So training sessions are optional now; the laptop no longer needs data/training or data/models.
 - Tests: tests/test_blink_setup.py (6).
 
-**To test (headset):** delete or rename data/profiles/default-muse.json (or use a new profile), `.ayn run`, set the
+**To test (headset):** delete or rename data/profiles/default-muse.json (or use a new profile), `.\bayn run`, set the
 trigger to triple blink → the hint says "built-in Muse blink pattern" → try some triple blinks → **Calibrate…** →
 the hint says "your calibrated blink pattern" → triple blinks again. (The trained model in data/models still wins
 on the dev PC; rename it to test the fresh-install path.)
@@ -475,4 +475,21 @@ for that.
 
 Open: host the preview (GitHub Pages: Settings → Pages → main, /docs → https://omar0rawas.github.io/bayn/preview/)?
 Next: 4) repo and docs cleanup, demo videos.
+
+## Repo + docs cleanup (2026-11-11) ✅ (user confirmed 2026-11-11)
+User request: scan and clean up the repo, clean up the "about", keep the warnings, say that absence seizures are the
+target but the triggers are deliberate for development, mention the seizure model and its data source, list the
+libraries and models explicitly; then a scan and a self-rating.
+- README restructured: **About** (absence seizures as the target; deliberate triggers for development; the detector
+  socket; the mock CHB-MIT model, not an absence-seizure detector), Try it (judges), How it works, **Built with**
+  (libraries by area, models with what they're used for and where they run, data source), Quickstart, Triggers,
+  seizure socket, transcription, summaries, laptop, configuration, Muse notes, layout, **Documentation** index (replaces
+  the stale phase table), testing, privacy, **Acknowledgements** (CHB-MIT citation as ODC-By requires).
+- GitHub About: new description + 12 topics. pyproject description updated.
+- Model card (and its generator): Bayn targets absence seizures; CHB-MIT doesn't label seizure types, so the mock
+  model is not an absence-seizure detector.
+- Removed: the inert `SeizureDetectorStub` (superseded by the mock model, which now runs the detector contract tests;
+  the plug-in guide moved into seizure_model.py), the placeholder docs/img/dashboard.svg.
+- Fixed: D34 (backspace characters in 4 docs), D35 (`httpx` missing from the runtime dependencies); stale texts (training
+  dialog said a classifier learns; training.py said double blink).
 

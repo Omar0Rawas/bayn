@@ -212,9 +212,10 @@
     <div class="cal-box train-box" role="dialog" aria-modal="true" aria-labelledby="train-prompt">
       <p class="muted small" id="train-step">Train the triple-blink detector</p>
       <div id="train-intro" class="train-intro">
-        <p>You'll be prompted to blink, nod, turn your head, look sideways and talk. Every prompt labels
-          the EEG, and a classifier learns to tell a deliberate triple blink from everything else, double blinks included.
-          Sessions are saved, so each new one makes the detector better.</p>
+        <p>Optional: <b>Calibrate…</b> (about a minute) already learns your blink pattern. A session goes further: you'll
+          be prompted to blink, nod, turn your head, look sideways and talk, every prompt labels the EEG, and Bayn learns
+          your blink pattern and threshold from them (and checks whether a classifier would do better). Sessions are
+          saved, so each new one adds to the last.</p>
         <div class="train-options">
           <label class="field">You are
             <select id="train-condition">

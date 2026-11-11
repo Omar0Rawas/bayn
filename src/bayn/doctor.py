@@ -8,7 +8,6 @@ Reports, never changes anything. Exit code 1 only for problems that block the de
 from __future__ import annotations
 
 import importlib
-import os
 import platform
 import shutil
 import socket

@@ -6,7 +6,7 @@ import pytest
 from bayn.common.config import BlinkConfig, ClenchConfig, EventsConfig
 from bayn.eeg.sources.simulated import SimulatedEEG
 from bayn.events.detectors import (BlinkCountDetector, ClenchDetector, Detection, Detector, ManualDetector,
-                                   SeizureDetectorStub, make_gesture_detectors)
+                                   SeizureModelDetector, make_gesture_detectors)
 from tests.helpers import CHANNELS, FS, match, schedule_injections, sim_chunks
 
 pytestmark = pytest.mark.unit
@@ -15,7 +15,7 @@ ALL_DETECTORS = [
     lambda: ClenchDetector(FS, CHANNELS),
     lambda: BlinkCountDetector(FS, CHANNELS),
     lambda: ManualDetector(FS, CHANNELS),
-    lambda: SeizureDetectorStub(FS, CHANNELS),
+    lambda: SeizureModelDetector(FS, CHANNELS),
 ]
 CONTRACT = ALL_DETECTORS + [lambda: __import__("bayn.events.blink_ml", fromlist=["x"]).MLBlinkDetector(FS, CHANNELS)]
 
@@ -31,7 +31,7 @@ def _run(det: Detector, seconds: float, seed: int, gesture: str | None = None, n
 
 
 # ---------------------------------------------------------------- interface contract
-@pytest.mark.parametrize("factory", CONTRACT, ids=["clench", "triple_blink", "manual", "seizure_stub", "ml_blink"])
+@pytest.mark.parametrize("factory", CONTRACT, ids=["clench", "triple_blink", "manual", "seizure_model", "ml_blink"])
 def test_detector_contract(factory):
     det = factory()
     assert isinstance(det, Detector) and det.name and det.label
@@ -44,8 +44,8 @@ def test_detector_contract(factory):
     det.reset()                                           # must not raise
 
 
-def test_seizure_stub_never_fires():
-    _, found = _run(SeizureDetectorStub(FS, CHANNELS), 60, seed=2, gesture="clench", n=2)
+def test_seizure_model_ignores_clenches():
+    _, found = _run(SeizureModelDetector(FS, CHANNELS), 60, seed=2, gesture="clench", n=2)
     assert found == []
 
 

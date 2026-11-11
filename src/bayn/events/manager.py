@@ -15,7 +15,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 
 from bayn.common.config import DATA_DIR, EventsConfig
 from bayn.common.schemas import TOPIC_CALIBRATION, TOPIC_EVENT, TOPIC_EVENT_DONE, TOPIC_TRAINING, EEGChunk
@@ -33,7 +32,7 @@ TRAIN = "_train"             # asks the service to train the blink classifier (i
 STALE_GRACE_S = 5.0          # finalize by wall clock if EEG stopped arriving
 
 LABELS = {"clench": "Jaw clench", "triple_blink": "Triple blink", "double_blink": "Double blink", "manual": "Manual trigger",
-          "seizure_stub": "Seizure detector", "seizure_model": "Seizure-like pattern (mock model)"}
+          "seizure_model": "Seizure-like pattern (mock model)"}
 
 
 @dataclass(slots=True)

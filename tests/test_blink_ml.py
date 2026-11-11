@@ -14,7 +14,7 @@ from bayn.common.config import BlinkConfig, EventsConfig, TrainingConfig
 from bayn.common.schemas import TOPIC_TRAINING
 from bayn.eeg.sources.simulated import SimulatedEEG
 from bayn.events import blink_ml, training
-from bayn.events.blink_ml import (FEATURES, CandidateFinder, MLBlinkDetector, episode_features, find_episodes,
+from bayn.events.blink_ml import (FEATURES, MLBlinkDetector, episode_features, find_episodes,
                                   label_episodes, segment_bounds)
 from bayn.events.detectors import BlinkCountDetector, make_gesture_detectors
 from bayn.events.manager import INJECT, TRAIN, EventManager

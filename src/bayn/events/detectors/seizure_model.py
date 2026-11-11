@@ -7,7 +7,16 @@ Detection -> event -> saved EEG window -> transcript -> summary.
 
 Live: 4 s windows every 1 s on TP9/AF7/AF8/TP10 (features identical to training, bayn.seizure.features);
 alarm when P >= threshold for `consecutive` windows in a row, then quiet for `refractory_s`.
-Off by default (`events.seizure.enabled`); `bayn demo` switches it on.
+Off by default (`events.seizure.enabled`); `bayn demo` and `bayn showcase` switch it on.
+
+Replacing it with a real model (e.g. one for absence seizures, trained and validated on the target headset):
+  1. Subclass Detector like this class: keep the signal it needs (raw or filtered EEG) in update().
+  2. Run the model every step on the latest window -> probability p.
+  3. When p stays above the threshold long enough, return [Detection(name, onset, p, kind="seizure")].
+  4. Create it in bayn.events.detectors.make_gesture_detectors (here: when events.seizure.enabled).
+The event manager, EEG window storage, transcript and summary pipeline then work unchanged; seizure-kind
+detections bypass the gesture cooldown and are labelled "automatic". Any real seizure detection needs clinical
+validation and regulatory clearance.
 """
 
 from __future__ import annotations

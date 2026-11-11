@@ -1,4 +1,4 @@
-"""Hardware-in-the-loop tests with a real Muse 2. Skipped unless BAYN_HARDWARE=1.
+r"""Hardware-in-the-loop tests with a real Muse 2. Skipped unless BAYN_HARDWARE=1.
 
     $env:BAYN_HARDWARE=1; .\.venv\Scripts\python.exe -m pytest -m hardware -v     # Windows
     BAYN_HARDWARE=1 pytest -m hardware -v                                       # macOS/Linux

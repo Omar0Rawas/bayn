@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bayn"
 version = "0.1.0"
-description = "Local Muse 2 EEG -> gesture trigger -> Whisper transcript -> local LLM summary (hackathon prototype, not a medical device)"
+description = "Offline EEG event capture for absence-seizure documentation: Muse 2 trigger -> Arabic/English Whisper transcript -> local LLM summary (hackathon prototype, not a medical device)"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
@@ -23,13 +23,14 @@ dependencies = [
   "brainflow>=5.12",
   "pylsl>=1.16",
   "scikit-learn>=1.5",
+  "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
 muselsl = ["muselsl>=2.2", "bleak>=0.22", "bitstring<5"]
 stt = ["faster-whisper>=1.1", "sounddevice>=0.5"]
 gpu = ["nvidia-cublas-cu12", "nvidia-cudnn-cu12>=9,<10"]
-dev = ["pytest>=8", "httpx>=0.27"]
+dev = ["pytest>=8", "pillow>=10"]  # pillow: GIFs (python -m bayn.preview gif)
 
 [project.scripts]
 bayn = "bayn.run:main"

@@ -23,7 +23,6 @@ import platform
 import sys
 import time
 from contextlib import contextmanager
-from pathlib import Path
 
 from bayn import corpus
 from bayn.common.config import DATA_DIR, ROOT, load_config

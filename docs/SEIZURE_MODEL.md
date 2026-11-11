@@ -11,6 +11,7 @@
 | | |
 |---|---|
 | Purpose | Demonstrate the `Detector` socket: a model's alarm creates an event, the EEG window is saved, and the transcript and summary follow, exactly as for a gesture |
+| Not an absence-seizure detector | Bayn targets **absence seizures** (brief staring spells, classically with generalised ~3 Hz spike-and-wave EEG). CHB-MIT does not label seizure types and was not collected for absence seizures, so this model is **not** an absence-seizure detector: a real one needs its own data, ideally recorded with the target headset |
 | Training data | **CHB-MIT Scalp EEG Database** (PhysioNet): 8 patients (chb01, chb02, chb03, chb05, chb06, chb08, chb10, chb20), 46.9 h, 28 seizures |
 | Channels | TP9, AF7, AF8, TP10 against a forehead reference, approximated from the bipolar montage: AF7 ≈ −(FP1−F7)/2, TP9 ≈ −(FP1−F7)−(F7−T7), mirrored on the right |
 | Features | 14 per 4 s window, every 1 s: change in line length and power against the person's own baseline 30–180 s earlier, relative delta/theta/alpha/beta power, dominant frequency, rhythmicity, Hjorth parameters, synchrony between channels ([features.py](../src/bayn/seizure/features.py)) |

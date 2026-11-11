@@ -67,7 +67,7 @@ Check every change against the laptop, not just the dev PC:
   .joblib → `MLBlinkDetector` (rule fallback; `triple_blink.method` auto = ML only if it beat the rule held-out; it did not: docs/BLINK_DECISION.md). Finder + features must stay identical
   offline and live (test). Real Muse forehead noise is 22-87 µV (sim ~10): check changes on real windows too.
 - Blink pattern (2026-11-11), most personal first: trained model > Calibrate-learned (profile `weights`) > built-in
-  Muse pattern (events/assets/blink_muse.json, real headsets only) > AF7/AF8 "front" (simulator). `.ayn blink
+  Muse pattern (events/assets/blink_muse.json, real headsets only) > AF7/AF8 "front" (simulator). `.\bayn blink
   calibration` = held-out check on real sessions (Calibrate 66 %/0.52 vs trained 67 %/0.30 per min).
 - Seizure socket (2026-11-10): `SeizureModelDetector` (events/detectors/seizure_model.py) = MOCK logistic model
   trained on CHB-MIT (bayn.seizure: chbmit / features / train; assets/model.json + chbmit_clip.npz shipped; data in
@@ -78,6 +78,9 @@ Check every change against the laptop, not just the dev PC:
   export | gif` → docs/preview (static replay, works from file://) + docs/media/*.gif (headless Edge, no new deps).
   Re-record after UI changes. Seizure alarms bypass the gesture cooldown (D32); the seizure detector survives
   gesture changes (D33).
+- README is for judges first (About → Try it → Built with …); keep the warnings and the "mock / not validated /
+  not an absence-seizure detector" wording wherever the seizure model appears. Edit docs with the Edit tool or byte-safe
+  scripts: `.\bayn` in a non-raw Python string becomes a backspace (D34).
 - Config: config/default.yaml <- config/local.yaml <- .env <- env vars `BAYN_SECTION__KEY` (src/bayn/common/config.py).
 
 ## Hardware notes
